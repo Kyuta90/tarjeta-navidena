@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tarjeta Navideña de Deseos 🎄✨</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <!-- Custom Festive Styles -->
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="/images/default-gift.svg" type="image/svg+xml">
+</head>
+<body id="cardBody" class="theme-classic-red min-h-screen relative text-slate-100 flex flex-col selection:bg-red-500 selection:text-white">
+
+  <!-- Luces Navideñas Superiores -->
+  <ul class="lightrope">
+    <li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li>
+    <li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li>
+    <li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li>
+  </ul>
+
+  <!-- Canvas de Nieve -->
+  <canvas id="snowCanvas"></canvas>
+
+  <!-- Botón Flotante de Música Navideña -->
+  <button id="musicToggleBtn" class="music-toggle-btn bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-4 rounded-full border-2 border-amber-300 shadow-xl flex items-center gap-2 cursor-pointer transition-transform">
+    🔔 <span class="hidden sm:inline">Música:</span> OFF
+  </button>
+
+  <!-- Contenedor Principal de la Tarjeta Navideña -->
+  <main class="relative z-20 flex-grow max-w-4xl mx-auto w-full px-4 sm:px-6 py-10">
+
+    <!-- Tarjeta de Saludo Navideño (Header & Carta) -->
+    <div class="relative bg-gradient-to-b from-red-950/90 via-stone-900/90 to-red-950/90 border-2 border-amber-400 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-md mb-10 overflow-hidden text-center">
+      
+      <!-- Decoraciones en esquinas -->
+      <span class="absolute top-3 left-4 text-3xl sm:text-4xl animate-bounce">🎅</span>
+      <span class="absolute top-3 right-4 text-3xl sm:text-4xl animate-pulse">🎄</span>
+      <span class="absolute bottom-3 left-4 text-2xl opacity-60">❄️</span>
+      <span class="absolute bottom-3 right-4 text-2xl opacity-60">⭐</span>
+
+      <!-- Cinta o distintivo superior -->
+      <div class="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-stone-950 text-xs sm:text-sm font-extrabold px-4 py-1 rounded-full uppercase tracking-widest shadow-lg mb-4">
+        <span>✨</span> Carta de Deseos de Navidad <span>✨</span>
+      </div>
+
+      <h1 id="cardTitle" class="text-3xl sm:text-5xl font-extrabold font-christmas text-amber-300 tracking-wider drop-shadow-lg mb-4">
+        Mis Deseos Navideños
+      </h1>
+
+      <!-- De y Para (Opcionales) -->
+      <div id="deParaContainer" class="flex flex-wrap items-center justify-center gap-4 text-sm sm:text-base font-medium mb-6">
+        <div id="recipientBox" class="bg-black/40 border border-amber-400/30 rounded-xl px-4 py-2 text-red-200">
+          <span class="text-xs text-amber-400 uppercase font-bold block">Para:</span>
+          <span id="recipientName" class="text-white font-bold text-base sm:text-lg"></span>
+        </div>
+        <div id="senderBox" class="bg-black/40 border border-amber-400/30 rounded-xl px-4 py-2 text-red-200">
+          <span class="text-xs text-amber-400 uppercase font-bold block">De:</span>
+          <span id="senderName" class="text-white font-bold text-base sm:text-lg"></span>
+        </div>
+      </div>
+
+      <!-- Mensaje Navideño (Opcional) -->
+      <div id="messageContainer" class="relative max-w-2xl mx-auto bg-black/30 border border-white/10 rounded-2xl p-4 sm:p-6 italic text-sm sm:text-base text-red-100 font-serif-festive leading-relaxed">
+        <span class="text-3xl text-amber-400 leading-none">“</span>
+        <p id="cardMessageText" class="inline px-2"></p>
+        <span class="text-3xl text-amber-400 leading-none">”</span>
+      </div>
+
+      <div class="mt-6 flex items-center justify-center gap-2 text-xs text-amber-200/80">
+        <span>🎁</span>
+        <span>A continuación encontrarás los artículos deseados en el orden de preferencia</span>
+        <span>🎁</span>
+      </div>
+    </div>
+
+    <!-- LISTA DE ARTÍCULOS EN ORDEN DE INGRESO -->
+    <div class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/15 pb-3">
+        <div class="flex items-center gap-3">
+          <h2 class="text-xl sm:text-2xl font-bold text-amber-300 flex items-center gap-2">
+            <span>🎀</span> Lista de Deseos
+          </h2>
+          <span id="itemsTotalBadge" class="bg-red-800 text-amber-200 text-xs font-bold px-3 py-1 rounded-full border border-amber-400/40">
+            Cargando...
+          </span>
+        </div>
+
+        <!-- Controles de Vista: Horizontal / Vertical y Flechas de Carrusel -->
+        <div class="flex items-center gap-2">
+          <!-- Botones de modo -->
+          <div class="inline-flex bg-black/40 border border-white/20 rounded-xl p-1 text-xs">
+            <button id="layoutVerticalBtn" type="button" class="px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 text-slate-300 hover:text-white" title="Vista en lista vertical">
+              <span>↕️</span> <span class="hidden sm:inline">Vertical</span>
+            </button>
+            <button id="layoutHorizontalBtn" type="button" class="px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 text-slate-300 hover:text-white" title="Vista en carrusel horizontal">
+              <span>↔️</span> <span class="hidden sm:inline">Horizontal</span>
+            </button>
+          </div>
+
+          <!-- Flechas de navegación para modo horizontal -->
+          <div id="carouselArrows" class="hidden sm:flex items-center gap-1">
+            <button id="carouselPrevBtn" type="button" class="w-8 h-8 rounded-lg bg-black/50 hover:bg-amber-500 hover:text-black border border-white/20 text-amber-300 flex items-center justify-center font-bold text-sm transition-all" title="Ver anterior">
+              ‹
+            </button>
+            <button id="carouselNextBtn" type="button" class="w-8 h-8 rounded-lg bg-black/50 hover:bg-amber-500 hover:text-black border border-white/20 text-amber-300 flex items-center justify-center font-bold text-sm transition-all" title="Ver siguiente">
+              ›
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contenedor dinámico de artículos (se alterna entre wishlist-vertical y wishlist-horizontal) -->
+      <div id="cardItemsContainer" class="wishlist-vertical scrollbar-festive transition-all">
+        <!-- Los artículos se inyectan dinámicamente aquí según su orden -->
+      </div>
+    </div>
+
+    <!-- Estado de Carga -->
+    <div id="cardLoading" class="text-center py-20">
+      <div class="text-5xl animate-spin mb-4">❄️</div>
+      <p class="text-xl font-bold text-amber-300">Abriendo la tarjeta navideña...</p>
+      <p class="text-sm text-red-200 mt-1">Preparando la lista de deseos con mucho cariño</p>
+    </div>
+
+    <!-- Mensaje de Error si no se encuentra -->
+    <div id="cardError" class="hidden text-center py-16 bg-black/40 border border-red-500/40 rounded-3xl p-8">
+      <div class="text-5xl mb-4">🎄💔</div>
+      <h3 class="text-2xl font-bold text-white mb-2">Tarjeta no encontrada</h3>
+      <p class="text-sm text-red-200 max-w-md mx-auto mb-6">
+        No se pudo cargar la información de esta tarjeta navideña o el enlace ha expirado.
+      </p>
+      <a href="/" class="bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-sm transition-all inline-flex items-center gap-2">
+        <span>✨</span> Crear mi propia tarjeta navideña
+      </a>
+    </div>
+
+    <!-- Botón Volver / Crear Tarjeta -->
+    <div class="mt-12 text-center pt-8 border-t border-white/10">
+      <p class="text-xs text-red-200 mb-3">¿Te gustó esta tarjeta navideña?</p>
+      <a href="/" class="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 via-amber-600 to-emerald-600 hover:opacity-90 text-white font-bold px-6 py-3 rounded-2xl shadow-xl text-sm border border-amber-300 transition-transform hover:scale-105">
+        <span>🎅</span> ¡Crea tu propia tarjeta de deseos con QR gratis!
+      </a>
+    </div>
+
+  </main>
+
+  <!-- Modal para Visualizar Imagen en Grande (Lightbox) -->
+  <div id="imageLightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md cursor-pointer">
+    <div class="relative max-w-2xl max-h-[90vh] bg-stone-900 border-2 border-amber-400 rounded-2xl p-4 flex flex-col items-center">
+      <button id="closeLightboxBtn" class="absolute top-2 right-2 text-white bg-black/60 rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 text-lg">
+        ✕
+      </button>
+      <img id="lightboxImg" src="" alt="Imagen ampliada del artículo" class="max-w-full max-h-[70vh] object-contain rounded-lg mb-3">
+      <p id="lightboxCaption" class="text-sm font-semibold text-amber-200 text-center"></p>
+    </div>
+  </div>
+
+  <!-- Pie de Página -->
+  <footer class="relative z-20 py-6 text-center text-xs text-red-200/80 border-t border-white/10 bg-black/20 mt-auto">
+    <p>🎄 Tarjeta Navideña de Deseos • ¡Feliz Navidad y Próspero Año Nuevo! 🎅</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="/js/snow.js"></script>
+  <script src="/js/audio.js"></script>
+  <script src="/js/card.js"></script>
+</body>
+</html>
