@@ -1,0 +1,336 @@
+/* ========================================================
+   ESTILOS FESTIVOS - TARJETA NAVIDEÑA DIGITAL DE DESEOS
+   ======================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+
+:root {
+  --navidad-red: #c1121f;
+  --navidad-red-dark: #780000;
+  --navidad-green: #2d6a4f;
+  --navidad-green-dark: #1b4332;
+  --navidad-gold: #f4a261;
+  --navidad-gold-light: #ffe6a7;
+  --navidad-cream: #fdf0d5;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+.font-christmas {
+  font-family: 'Mountains of Christmas', cursive;
+}
+
+.font-serif-festive {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* ========================================================
+   GUIRNALDA DE LUCES NAVIDEÑAS
+   ======================================================== */
+.lightrope {
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 20;
+  margin: -15px 0 0 0;
+  padding: 0;
+  pointer-events: none;
+  list-style: none;
+}
+
+.lightrope li {
+  position: relative;
+  display: inline-block;
+  list-style: none;
+  margin: 0 15px;
+  padding: 0;
+  display: inline-block;
+  width: 12px;
+  height: 28px;
+  border-radius: 50%;
+  top: 20px;
+  background: #ff5252;
+  box-shadow: 0px 4px 24px 3px rgba(255, 82, 82, 1);
+  animation-name: lightTwinkle-red;
+  animation-fill-mode: both;
+  animation-iteration-count: infinite;
+  animation-duration: 2s;
+}
+
+.lightrope li:before {
+  content: "";
+  position: absolute;
+  background: #222;
+  width: 10px;
+  height: 9px;
+  border-radius: 3px;
+  top: -4px;
+  left: 1px;
+}
+
+.lightrope li:after {
+  content: "";
+  top: -14px;
+  left: 9px;
+  position: absolute;
+  width: 52px;
+  height: 18px;
+  border-bottom: solid #374151 2px;
+  border-radius: 50%;
+}
+
+.lightrope li:nth-child(2n+1) {
+  background: #4ade80;
+  box-shadow: 0px 4px 24px 3px rgba(74, 222, 128, 1);
+  animation-name: lightTwinkle-green;
+  animation-duration: 1.8s;
+}
+
+.lightrope li:nth-child(4n+2) {
+  background: #fbbf24;
+  box-shadow: 0px 4px 24px 3px rgba(251, 191, 36, 1);
+  animation-name: lightTwinkle-gold;
+  animation-duration: 2.2s;
+}
+
+.lightrope li:nth-child(3n+1) {
+  background: #60a5fa;
+  box-shadow: 0px 4px 24px 3px rgba(96, 165, 250, 1);
+  animation-name: lightTwinkle-blue;
+  animation-duration: 2.5s;
+}
+
+.lightrope li:nth-child(odd) {
+  animation-duration: 1.6s;
+}
+
+@keyframes lightTwinkle-red {
+  0%, 100% { background: #ff5252; box-shadow: 0px 4px 24px 3px rgba(255, 82, 82, 1); }
+  50% { background: rgba(255, 82, 82, 0.4); box-shadow: 0px 4px 10px 1px rgba(255, 82, 82, 0.2); }
+}
+
+@keyframes lightTwinkle-green {
+  0%, 100% { background: #4ade80; box-shadow: 0px 4px 24px 3px rgba(74, 222, 128, 1); }
+  50% { background: rgba(74, 222, 128, 0.4); box-shadow: 0px 4px 10px 1px rgba(74, 222, 128, 0.2); }
+}
+
+@keyframes lightTwinkle-gold {
+  0%, 100% { background: #fbbf24; box-shadow: 0px 4px 24px 3px rgba(251, 191, 36, 1); }
+  50% { background: rgba(251, 191, 36, 0.4); box-shadow: 0px 4px 10px 1px rgba(251, 191, 36, 0.2); }
+}
+
+@keyframes lightTwinkle-blue {
+  0%, 100% { background: #60a5fa; box-shadow: 0px 4px 24px 3px rgba(96, 165, 250, 1); }
+  50% { background: rgba(96, 165, 250, 0.4); box-shadow: 0px 4px 10px 1px rgba(96, 165, 250, 0.2); }
+}
+
+/* ========================================================
+   TEMAS NAVIDEÑOS DE FONDO
+   ======================================================== */
+.theme-classic-red {
+  background: radial-gradient(circle at top center, #991b1b 0%, #7f1d1d 30%, #450a0a 75%, #1c0505 100%);
+  color: #ffffff;
+}
+
+.theme-winter-night {
+  background: radial-gradient(circle at top center, #1e3a8a 0%, #0f172a 40%, #030712 100%);
+  color: #ffffff;
+}
+
+.theme-forest-gold {
+  background: radial-gradient(circle at top center, #065f46 0%, #064e3b 40%, #022c22 80%, #011611 100%);
+  color: #ffffff;
+}
+
+/* ========================================================
+   CANVAS DE NIEVE
+   ======================================================== */
+#snowCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ========================================================
+   TARJETAS Y CRISTALERÍA FESTIVA
+   ======================================================== */
+.festive-glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.35);
+}
+
+.festive-card-white {
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.2), 0 0 15px rgba(245, 158, 11, 0.15);
+}
+
+.gold-gradient-border {
+  border: 2px solid transparent;
+  border-image: linear-gradient(to right, #f59e0b, #fde68a, #d97706) 1;
+}
+
+.gold-shimmer {
+  background: linear-gradient(135deg, #fef3c7 0%, #f59e0b 50%, #d97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ========================================================
+   ANIMACIONES
+   ======================================================== */
+@keyframes floatGift {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(-1.5deg); }
+}
+
+.animate-float {
+  animation: floatGift 4s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 35px rgba(245, 158, 11, 0.8); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s infinite;
+}
+
+/* ========================================================
+   CINTA DE REGALO (RIBBON)
+   ======================================================== */
+.ribbon-badge {
+  position: absolute;
+  top: 12px;
+  left: -8px;
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: white;
+  padding: 4px 14px 4px 10px;
+  font-size: 0.825rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+  border-radius: 0 4px 4px 0;
+  z-index: 10;
+}
+
+.ribbon-badge::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  border-top: 6px solid #450a0a;
+  border-left: 8px solid transparent;
+}
+
+/* Botón de música flotante */
+.music-toggle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.music-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ========================================================
+   MODOS DE VISUALIZACIÓN: HORIZONTAL Y VERTICAL RESPONSIVE
+   ======================================================== */
+.wishlist-horizontal {
+  display: flex !important;
+  flex-direction: row !important;
+  overflow-x: auto !important;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  padding-bottom: 1.5rem;
+  padding-top: 0.5rem;
+  gap: 1.5rem;
+}
+
+.wishlist-horizontal .wishlist-item-card {
+  flex: 0 0 84vw;
+  max-width: 350px;
+  scroll-snap-align: center;
+}
+
+@media (min-width: 640px) {
+  .wishlist-horizontal .wishlist-item-card {
+    flex: 0 0 320px;
+    max-width: 320px;
+    scroll-snap-align: start;
+  }
+}
+
+.wishlist-vertical {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .wishlist-vertical {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .wishlist-vertical {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+.scrollbar-festive::-webkit-scrollbar {
+  height: 10px;
+  width: 8px;
+}
+
+.scrollbar-festive::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 9999px;
+}
+
+.scrollbar-festive::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #dc2626, #f59e0b);
+  border-radius: 9999px;
+  border: 2px solid rgba(0, 0, 0, 0.5);
+}
+
+.scrollbar-festive::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #ef4444, #fbbf24);
+}
+
+/* Ajustes de scrollbar navideña */
+::-webkit-scrollbar {
+  width: 9px;
+}
+::-webkit-scrollbar-track {
+  background: #1c1917;
+}
+::-webkit-scrollbar-thumb {
+  background: #991b1b;
+  border-radius: 6px;
+  border: 2px solid #1c1917;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #dc2626;
+}

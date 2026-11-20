@@ -1,0 +1,23 @@
+{
+  "name": "tarjeta-de-navidad-digital",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/run-tests.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.21.1",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "localtunnel": "^2.0.2",
+    "qrcode": "^1.5.4"
+  }
+}
