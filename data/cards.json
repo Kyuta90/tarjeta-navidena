@@ -545,5 +545,63 @@
       }
     ],
     "createdAt": "2026-11-20T17:25:35.553Z"
+  },
+  "navidad-8c6d9d": {
+    "id": "navidad-8c6d9d",
+    "title": "Deseos de Prueba Navideña 2026",
+    "recipient": "Familia Test",
+    "sender": "Tester Automatizado",
+    "message": "¡Prueba de felicitación y deseos navideños!",
+    "theme": "classic-red",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://www.amazon.com/dp/B08N5LNQCX",
+        "title": "Artículo #1 - Audífonos Inalámbricos",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
+        "siteName": "Amazon"
+      },
+      {
+        "id": "item-2",
+        "order": 2,
+        "url": "https://www.mercadolibre.com/sueter",
+        "title": "Artículo #2 - Suéter Festivo",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2",
+        "siteName": "Mercado Libre"
+      },
+      {
+        "id": "item-3",
+        "order": 3,
+        "url": "https://www.falabella.com/cafetera",
+        "title": "Artículo #3 - Cafetera Espresso",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6",
+        "siteName": "Falabella"
+      }
+    ],
+    "createdAt": "2026-11-20T18:21:01.841Z"
+  },
+  "navidad-23930e": {
+    "id": "navidad-23930e",
+    "title": "Mis Deseos Navideños 🎄",
+    "recipient": "",
+    "sender": "",
+    "message": "",
+    "theme": "forest-gold",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://example.com/item-anonimo",
+        "title": "Regalo sin datos personales",
+        "description": "",
+        "image": "/images/default-gift.svg",
+        "siteName": "Tienda"
+      }
+    ],
+    "createdAt": "2026-11-20T18:21:01.870Z"
   }
 }
