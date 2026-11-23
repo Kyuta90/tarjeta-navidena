@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelPreviewBtn = document.getElementById('cancelPreviewBtn');
   const addItemToListBtn = document.getElementById('addItemToListBtn');
 
+  // Image Upload elements
+  const imageFileInput = document.getElementById('imageFileInput');
+  const directUploadBtn = document.getElementById('directUploadBtn');
+  const imageMissingAlert = document.getElementById('imageMissingAlert');
+  const alertUploadBtn = document.getElementById('alertUploadBtn');
+  const previewImgDropZone = document.getElementById('previewImgDropZone');
+  const changeImageBtn = document.getElementById('changeImageBtn');
+
   const itemsListContainer = document.getElementById('itemsListContainer');
   const emptyListState = document.getElementById('emptyListState');
   const itemsCounterBadge = document.getElementById('itemsCounterBadge');
@@ -286,11 +294,141 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLinkPreview(val);
   });
 
+  // -------------------------------------------------------------
+  // Image Upload, Drag & Drop, and Compression (Base64)
+  // -------------------------------------------------------------
+  function openImageFileDialog() {
+    if (imageFileInput) {
+      imageFileInput.value = '';
+      imageFileInput.click();
+    }
+  }
+
+  if (directUploadBtn) directUploadBtn.addEventListener('click', openImageFileDialog);
+  if (alertUploadBtn) alertUploadBtn.addEventListener('click', openImageFileDialog);
+  if (changeImageBtn) changeImageBtn.addEventListener('click', openImageFileDialog);
+
+  if (previewImgDropZone) {
+    previewImgDropZone.addEventListener('click', () => {
+      openImageFileDialog();
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      previewImgDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewImgDropZone.classList.add('border-amber-400', 'bg-amber-950/40');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      previewImgDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewImgDropZone.classList.remove('border-amber-400', 'bg-amber-950/40');
+      });
+    });
+
+    previewImgDropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processUploadedImageFile(files[0]);
+      }
+    });
+  }
+
+  if (imageFileInput) {
+    imageFileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        processUploadedImageFile(files[0]);
+      }
+    });
+  }
+
+  function processUploadedImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido (PNG, JPG, WEBP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const img = new Image();
+      img.onload = () => {
+        // Redimensionar a un tamaño óptimo (máx 800px) para mantener calidad nítida sin sobrecargar memoria
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        applyUploadedImage(dataUrl, file.name);
+      };
+      img.onerror = () => {
+        alert('No se pudo procesar la imagen seleccionada.');
+      };
+      img.src = readerEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function applyUploadedImage(imageDataUrl, fileName) {
+    const rawName = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Foto de Regalo';
+    const cleanTitle = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+
+    if (!currentPreview) {
+      currentPreview = {
+        url: linkInput.value.trim() || '#',
+        title: cleanTitle,
+        image: imageDataUrl,
+        siteName: 'Foto Subida',
+        description: 'Imagen subida desde dispositivo'
+      };
+      previewTitleInput.value = currentPreview.title;
+      previewOriginalUrl.textContent = currentPreview.url !== '#' ? currentPreview.url : 'Archivo local subido';
+      previewOriginalUrl.href = currentPreview.url;
+      previewSiteName.textContent = 'Foto Subida 📁';
+    } else {
+      currentPreview.image = imageDataUrl;
+      if (!previewTitleInput.value.trim()) {
+        previewTitleInput.value = cleanTitle;
+        currentPreview.title = cleanTitle;
+      }
+    }
+
+    previewImg.src = imageDataUrl;
+    previewImageUrlInput.value = imageDataUrl;
+
+    if (imageMissingAlert) {
+      imageMissingAlert.classList.add('hidden');
+    }
+
+    previewLoading.classList.add('hidden');
+    previewCard.classList.remove('hidden');
+  }
+
   // Fetch link preview from server
   async function fetchLinkPreview(url) {
     if (!url) return;
 
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     previewLoading.classList.remove('hidden');
 
     try {
@@ -313,7 +451,20 @@ document.addEventListener('DOMContentLoaded', () => {
       previewImg.src = currentPreview.image;
       previewImg.onerror = () => {
         previewImg.src = '/images/default-gift.svg';
+        if (imageMissingAlert) imageMissingAlert.classList.remove('hidden');
       };
+      previewImg.onload = () => {
+        if (!previewImg.src.includes('default-gift.svg') && imageMissingAlert) {
+          imageMissingAlert.classList.add('hidden');
+        }
+      };
+
+      if (!data.image || data.image.includes('default-gift.svg')) {
+        if (imageMissingAlert) imageMissingAlert.classList.remove('hidden');
+      } else {
+        if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
+      }
+
       previewTitleInput.value = currentPreview.title;
       previewImageUrlInput.value = currentPreview.image;
       previewOriginalUrl.textContent = currentPreview.url;
@@ -357,6 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
       previewOriginalUrl.href = url;
       previewSiteName.textContent = 'Enlace web';
 
+      if (imageMissingAlert) {
+        imageMissingAlert.classList.remove('hidden');
+      }
+
       previewCard.classList.remove('hidden');
     }
   }
@@ -364,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cancel preview
   cancelPreviewBtn.addEventListener('click', () => {
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     currentPreview = null;
     linkInput.value = '';
   });
@@ -397,6 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset preview
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     currentPreview = null;
     linkInput.value = '';
     linkInput.focus();

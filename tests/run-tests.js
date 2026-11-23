@@ -1,7 +1,22 @@
 const http = require('http');
+const path = require('path');
+const { fork } = require('child_process');
 
 const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+const HOST = '127.0.0.1';
+const BASE_URL = `http://${HOST}:${PORT}`;
+
+let serverProcess = null;
+
+async function ensureServerRunning() {
+  try {
+    await request({ hostname: HOST, port: PORT, path: '/', method: 'GET', timeout: 500 });
+  } catch (e) {
+    // Start local server in this session
+    serverProcess = fork(path.join(__dirname, '../server.js'), [], { stdio: 'inherit' });
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+}
 
 function request(options, data = null) {
   return new Promise((resolve, reject) => {
@@ -38,10 +53,13 @@ function pass(name, detail = '') {
 }
 
 function fail(name, error) {
-  console.log(`  ${colors.red}✖ FAIL${colors.reset} - ${colors.bold}${name}${colors.reset}\n    ${colors.red}${error}${colors.reset}`);
+  const errMsg = error ? (error.message || error.code || String(error)) : 'Unknown error';
+  console.log(`  ${colors.red}✖ FAIL${colors.reset} - ${colors.bold}${name}${colors.reset}\n    ${colors.red}${errMsg}${colors.reset}`);
 }
 
 async function runTestSuite() {
+  await ensureServerRunning();
+
   console.log(`\n======================================================`);
   console.log(`🎄 INICIANDO SUITE DE PRUEBAS: TARJETA NAVIDEÑA QR 🎅`);
   console.log(`> Servidor objetivo: ${BASE_URL}`);
@@ -58,14 +76,14 @@ async function runTestSuite() {
       pass(name);
       passedTests++;
     } catch (err) {
-      fail(name, err.message);
+      fail(name, err);
       failedTests++;
     }
   }
 
   // TEST 1: Servidor activo y página principal
   await test('1. Servidor web activo y sirve el Creador (GET /)', async () => {
-    const res = await request({ hostname: 'localhost', port: PORT, path: '/', method: 'GET' });
+    const res = await request({ hostname: HOST, port: PORT, path: '/', method: 'GET' });
     if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
     if (!res.raw.includes('linkInput')) throw new Error('No se encontró el input de enlace (#linkInput) en el HTML');
     if (!res.raw.includes('generateCardBtn')) throw new Error('No se encontró el botón de generar (#generateCardBtn)');
@@ -76,7 +94,7 @@ async function runTestSuite() {
   await test('2. Extracción de imagen referencial desde enlace directo de imagen', async () => {
     const directImageUrl = 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2';
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/preview?url=${encodeURIComponent(directImageUrl)}`,
       method: 'GET'
@@ -90,7 +108,7 @@ async function runTestSuite() {
   await test('3. Extracción de metadatos e imagen referencial desde página web', async () => {
     const webUrl = 'https://www.wikipedia.org';
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/preview?url=${encodeURIComponent(webUrl)}`,
       method: 'GET'
@@ -137,7 +155,7 @@ async function runTestSuite() {
     };
 
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: '/api/cards',
       method: 'POST',
@@ -160,7 +178,7 @@ async function runTestSuite() {
   await test('5. Al escanear el QR: verificar que los artículos aparezcan según el orden de ingreso', async () => {
     if (!createdCardId) throw new Error('No hay ID de tarjeta creada');
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/cards/${createdCardId}`,
       method: 'GET'
@@ -194,7 +212,7 @@ async function runTestSuite() {
   await test('6. Vista de la tarjeta navideña (Fondo navideño, música, orden y enlaces)', async () => {
     if (!createdCardId) throw new Error('No hay ID de tarjeta creada');
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/card/${createdCardId}`,
       method: 'GET'
@@ -227,7 +245,7 @@ async function runTestSuite() {
     };
 
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: '/api/cards',
       method: 'POST',
@@ -239,7 +257,7 @@ async function runTestSuite() {
 
     // Verificar en la API que recipient, sender y message estén vacíos
     const getRes = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/cards/${cardIdAnon}`,
       method: 'GET'
@@ -254,7 +272,7 @@ async function runTestSuite() {
   // TEST 8: Modos de visualización Horizontal y Vertical responsive
   await test('8. Soporte de lista responsive (Horizontal / Vertical según dispositivo)', async () => {
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/card/${createdCardId}`,
       method: 'GET'
@@ -271,7 +289,7 @@ async function runTestSuite() {
   // TEST 9: Descarga de tarjeta portable independiente (.html para WhatsApp / sin red)
   await test('9. Descarga de tarjeta portable autónoma (.html sin servidor)', async () => {
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/download-card/${createdCardId}`,
       method: 'GET'
@@ -285,7 +303,7 @@ async function runTestSuite() {
   // TEST 10: Generación de QR con URL pública personalizada (para ver en cualquier red / 4G)
   await test('10. Generación de QR con URL pública personalizada (4G / cualquier red)', async () => {
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: '/api/qr-custom',
       method: 'POST',
@@ -304,7 +322,7 @@ async function runTestSuite() {
   // TEST 11: Registro e Historial de tarjetas generadas (GET /api/cards)
   await test('11. Registro e Historial: listado de tarjetas generadas sin caducidad', async () => {
     const res = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: '/api/cards',
       method: 'GET'
@@ -321,7 +339,7 @@ async function runTestSuite() {
   await test('12. Eliminación manual: la tarjeta se conserva hasta que el usuario decida borrarla', async () => {
     // 1. Crear una tarjeta temporal para borrar
     const createTemp = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: '/api/cards',
       method: 'POST',
@@ -336,7 +354,7 @@ async function runTestSuite() {
 
     // 2. Eliminarla
     const delRes = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/cards/${tempId}`,
       method: 'DELETE'
@@ -347,7 +365,7 @@ async function runTestSuite() {
 
     // 3. Verificar que ya no existe (404)
     const checkRes = await request({
-      hostname: 'localhost',
+      hostname: HOST,
       port: PORT,
       path: `/api/cards/${tempId}`,
       method: 'GET'
@@ -356,6 +374,72 @@ async function runTestSuite() {
     if (checkRes.status !== 404) {
       throw new Error(`Se esperaba 404 para tarjeta eliminada, recibido: ${checkRes.status}`);
     }
+  });
+
+  // TEST 13: Opción de subir imagen propia si la imagen no carga o para fotos directas
+  await test('13. Subir imagen local (Base64) cuando no carga o por opción del usuario', async () => {
+    // 1. Verificar elementos de interfaz en el HTML principal
+    const pageRes = await request({ hostname: HOST, port: PORT, path: '/', method: 'GET' });
+    if (!pageRes.raw.includes('imageFileInput')) throw new Error('Falta el input de archivo #imageFileInput');
+    if (!pageRes.raw.includes('directUploadBtn')) throw new Error('Falta el botón de subir foto directa #directUploadBtn');
+    if (!pageRes.raw.includes('imageMissingAlert')) throw new Error('Falta la alerta de imagen faltante #imageMissingAlert');
+    if (!pageRes.raw.includes('alertUploadBtn')) throw new Error('Falta el botón de subir foto en la alerta #alertUploadBtn');
+    if (!pageRes.raw.includes('previewImgDropZone')) throw new Error('Falta la zona de arrastrar y soltar imagen #previewImgDropZone');
+    if (!pageRes.raw.includes('changeImageBtn')) throw new Error('Falta el botón de cambiar imagen #changeImageBtn');
+
+    // 2. Crear una tarjeta con una imagen Base64 (simulando foto subida localmente)
+    const base64Pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const cardUploadPayload = {
+      title: 'Tarjeta con Foto Subida por el Usuario',
+      recipient: 'Abuelita',
+      sender: 'Nieto',
+      message: '¡Mira la foto del regalo que te elegí!',
+      theme: 'classic-red',
+      items: [
+        {
+          order: 1,
+          url: 'https://ejemplo.com/tienda/articulo-con-foto-subida',
+          title: 'Regalo con Foto Personalizada Subida',
+          image: base64Pixel,
+          siteName: 'Foto Subida 📁'
+        }
+      ]
+    };
+
+    const createRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: '/api/cards',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, cardUploadPayload);
+
+    if (createRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${createRes.status}`);
+    const uploadedCardId = createRes.data.id;
+    if (!uploadedCardId) throw new Error('No se generó ID para la tarjeta con foto subida');
+
+    // 3. Verificar que la tarjeta almacene y devuelva la imagen Base64
+    const getRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/cards/${uploadedCardId}`,
+      method: 'GET'
+    });
+
+    if (getRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${getRes.status}`);
+    const savedItem = getRes.data.items[0];
+    if (!savedItem || savedItem.image !== base64Pixel) {
+      throw new Error('La imagen Base64 subida no se guardó o recuperó correctamente');
+    }
+
+    // 4. Verificar renderizado en la página pública de la tarjeta
+    const viewRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/card/${uploadedCardId}`,
+      method: 'GET'
+    });
+    if (viewRes.status !== 200) throw new Error(`Status esperado 200 al ver la tarjeta con foto subida`);
   });
 
   // RESUMEN FINAL
@@ -369,6 +453,10 @@ async function runTestSuite() {
   console.log(`Tarjeta creada de prueba: ${BASE_URL}/card/${createdCardId}`);
   console.log(`======================================================\n`);
 
+  if (serverProcess) {
+    try { serverProcess.kill(); } catch {}
+  }
+
   if (failedTests > 0) {
     process.exit(1);
   } else {
@@ -377,6 +465,9 @@ async function runTestSuite() {
 }
 
 runTestSuite().catch(err => {
+  if (serverProcess) {
+    try { serverProcess.kill(); } catch {}
+  }
   console.error('Error fatal al ejecutar pruebas:', err);
   process.exit(1);
 });
