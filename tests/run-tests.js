@@ -442,6 +442,45 @@ async function runTestSuite() {
     if (viewRes.status !== 200) throw new Error(`Status esperado 200 al ver la tarjeta con foto subida`);
   });
 
+  // TEST 14: Reconocimiento inteligente de títulos e imágenes de Mercado Libre
+  await test('14. Reconocimiento de títulos e imágenes para Mercado Libre (Chile, Argentina, etc.)', async () => {
+    const meliUrl = 'https://articulo.mercadolibre.cl/MLC-1417066929-audifonos-inalambricos-bluetooth-f9-5-tws-touch-pantalla-led-_JM';
+    const res = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent(meliUrl)}`,
+      method: 'GET'
+    });
+
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (!res.data.title || !res.data.title.includes('Audífonos Inalámbricos Bluetooth')) {
+      throw new Error(`Título no reconocido correctamente: "${res.data.title}"`);
+    }
+    if (!res.data.siteName || !res.data.siteName.includes('Mercado Libre')) {
+      throw new Error(`Sitio no reconocido: "${res.data.siteName}"`);
+    }
+    if (!res.data.image || !res.data.image.startsWith('http')) {
+      throw new Error(`Imagen referencial no obtenida: "${res.data.image}"`);
+    }
+
+    // Probar también formato /p/ de Mercado Libre México o Argentina
+    const meliUrl2 = 'https://www.mercadolibre.com.mx/consola-playstation-5-digital-slim/p/MLM24183829';
+    const res2 = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent(meliUrl2)}`,
+      method: 'GET'
+    });
+
+    if (res2.status !== 200) throw new Error(`Status esperado 200 para ML México`);
+    if (!res2.data.title || !res2.data.title.toLowerCase().includes('playstation 5')) {
+      throw new Error(`Título no reconocido para ML México: "${res2.data.title}"`);
+    }
+    if (!res2.data.image || !res2.data.image.startsWith('http')) {
+      throw new Error(`Imagen no obtenida para ML México: "${res2.data.image}"`);
+    }
+  });
+
   // RESUMEN FINAL
   console.log(`\n======================================================`);
   console.log(`📊 RESUMEN DE PRUEBAS:`);

@@ -739,5 +739,161 @@
       }
     ],
     "createdAt": "2026-11-23T17:43:00.453Z"
+  },
+  "navidad-b25488": {
+    "id": "navidad-b25488",
+    "title": "Deseos de Prueba Navideña 2026",
+    "recipient": "Familia Test",
+    "sender": "Tester Automatizado",
+    "message": "¡Prueba de felicitación y deseos navideños!",
+    "theme": "classic-red",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://www.amazon.com/dp/B08N5LNQCX",
+        "title": "Artículo #1 - Audífonos Inalámbricos",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
+        "siteName": "Amazon"
+      },
+      {
+        "id": "item-2",
+        "order": 2,
+        "url": "https://www.mercadolibre.com/sueter",
+        "title": "Artículo #2 - Suéter Festivo",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2",
+        "siteName": "Mercado Libre"
+      },
+      {
+        "id": "item-3",
+        "order": 3,
+        "url": "https://www.falabella.com/cafetera",
+        "title": "Artículo #3 - Cafetera Espresso",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6",
+        "siteName": "Falabella"
+      }
+    ],
+    "createdAt": "2026-11-23T20:18:55.395Z"
+  },
+  "navidad-315857": {
+    "id": "navidad-315857",
+    "title": "Mis Deseos Navideños 🎄",
+    "recipient": "",
+    "sender": "",
+    "message": "",
+    "theme": "forest-gold",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://example.com/item-anonimo",
+        "title": "Regalo sin datos personales",
+        "description": "",
+        "image": "/images/default-gift.svg",
+        "siteName": "Tienda"
+      }
+    ],
+    "createdAt": "2026-11-23T20:18:55.427Z"
+  },
+  "navidad-422ac3": {
+    "id": "navidad-422ac3",
+    "title": "Tarjeta con Foto Subida por el Usuario",
+    "recipient": "Abuelita",
+    "sender": "Nieto",
+    "message": "¡Mira la foto del regalo que te elegí!",
+    "theme": "classic-red",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://ejemplo.com/tienda/articulo-con-foto-subida",
+        "title": "Regalo con Foto Personalizada Subida",
+        "description": "",
+        "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "siteName": "Foto Subida 📁"
+      }
+    ],
+    "createdAt": "2026-11-23T20:18:55.516Z"
+  },
+  "navidad-d71a77": {
+    "id": "navidad-d71a77",
+    "title": "Deseos de Prueba Navideña 2026",
+    "recipient": "Familia Test",
+    "sender": "Tester Automatizado",
+    "message": "¡Prueba de felicitación y deseos navideños!",
+    "theme": "classic-red",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://www.amazon.com/dp/B08N5LNQCX",
+        "title": "Artículo #1 - Audífonos Inalámbricos",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
+        "siteName": "Amazon"
+      },
+      {
+        "id": "item-2",
+        "order": 2,
+        "url": "https://www.mercadolibre.com/sueter",
+        "title": "Artículo #2 - Suéter Festivo",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2",
+        "siteName": "Mercado Libre"
+      },
+      {
+        "id": "item-3",
+        "order": 3,
+        "url": "https://www.falabella.com/cafetera",
+        "title": "Artículo #3 - Cafetera Espresso",
+        "description": "",
+        "image": "https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6",
+        "siteName": "Falabella"
+      }
+    ],
+    "createdAt": "2026-11-23T20:19:59.417Z"
+  },
+  "navidad-c4eef2": {
+    "id": "navidad-c4eef2",
+    "title": "Mis Deseos Navideños 🎄",
+    "recipient": "",
+    "sender": "",
+    "message": "",
+    "theme": "forest-gold",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://example.com/item-anonimo",
+        "title": "Regalo sin datos personales",
+        "description": "",
+        "image": "/images/default-gift.svg",
+        "siteName": "Tienda"
+      }
+    ],
+    "createdAt": "2026-11-23T20:19:59.454Z"
+  },
+  "navidad-0c9d84": {
+    "id": "navidad-0c9d84",
+    "title": "Tarjeta con Foto Subida por el Usuario",
+    "recipient": "Abuelita",
+    "sender": "Nieto",
+    "message": "¡Mira la foto del regalo que te elegí!",
+    "theme": "classic-red",
+    "items": [
+      {
+        "id": "item-1",
+        "order": 1,
+        "url": "https://ejemplo.com/tienda/articulo-con-foto-subida",
+        "title": "Regalo con Foto Personalizada Subida",
+        "description": "",
+        "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "siteName": "Foto Subida 📁"
+      }
+    ],
+    "createdAt": "2026-11-23T20:19:59.556Z"
   }
 }

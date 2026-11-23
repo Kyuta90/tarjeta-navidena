@@ -119,6 +119,246 @@ app.get('/api/network-ips', (req, res) => {
   });
 });
 
+// Helper to match referential HD product image by keyword
+function getReferentialImage(title, categoryName = '') {
+  const text = `${title} ${categoryName}`.toLowerCase();
+
+  if (/aud[ií]fono|auricular|headphone|airpod|earbud/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/su[eé]ter|ropa|vestid|poler|chaqueta|abrigo|camisa|pantal[oó]n|navide[ñn]o/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/cafeter|caf[eé]|espresso|capuchino|barista/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/playstation|ps5|ps4|xbox|nintendo|switch|consola|gamer|joystick|gamepad|videojuego/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/celular|smart|phone|iphone|samsung|xiaomi|motorola|m[oó]vil|huawei/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/reloj|smartwatch|band|garmin|apple watch/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/perfume|fragancia|colonia|locion|aroma/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/zapatilla|calzado|zapato|sneaker|bota|chala/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/termo|stanley|botella|mug|vaso|vasos/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/notebook|laptop|computador|pc|teclado|monitor|mouse/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/mochila|bolso|cartera|maleta|morral/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/bicicleta|scooter|patin|monopat[ií]n/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/libro|novela|lectura|manga|comic|kindle/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/juguete|lego|mu[ñn]ec|peluche|figura|juego de mesa/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/c[aá]mara|foto|lente|gopro|dron/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/guitarra|piano|teclado musical|instrumento|bater[ií]a/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/herramienta|taladro|soldadora|set destornillador/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/maquillaje|labial|sombras|cosmetico|skincare/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=700&auto=format&fit=crop&q=80';
+  }
+  if (/vino|cerveza|whisky|licor|champagne|espumante/i.test(text)) {
+    return 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=700&auto=format&fit=crop&q=80';
+  }
+
+  return '/images/default-gift.svg';
+}
+
+// Specialized metadata extractor for Mercado Libre links
+async function extractMercadoLibreData(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    const isMeli = /(?:mercadolibre|mercadolivre)\./i.test(hostname);
+    if (!isMeli) return null;
+
+    let siteName = 'Mercado Libre';
+    let siteId = 'MLC';
+    if (hostname.endsWith('.cl')) {
+      siteName = 'Mercado Libre Chile';
+      siteId = 'MLC';
+    } else if (hostname.endsWith('.com.ar')) {
+      siteName = 'Mercado Libre Argentina';
+      siteId = 'MLA';
+    } else if (hostname.endsWith('.com.mx')) {
+      siteName = 'Mercado Libre México';
+      siteId = 'MLM';
+    } else if (hostname.endsWith('.com.co')) {
+      siteName = 'Mercado Libre Colombia';
+      siteId = 'MCO';
+    } else if (hostname.endsWith('.com.pe')) {
+      siteName = 'Mercado Libre Perú';
+      siteId = 'MPE';
+    } else if (hostname.endsWith('.com.uy')) {
+      siteName = 'Mercado Libre Uruguay';
+      siteId = 'MLU';
+    } else if (hostname.endsWith('.com.br')) {
+      siteName = 'Mercado Livre Brasil';
+      siteId = 'MLB';
+    } else if (hostname.endsWith('.com.ec')) {
+      siteName = 'Mercado Libre Ecuador';
+      siteId = 'MEC';
+    } else if (hostname.endsWith('.com.ve')) {
+      siteName = 'Mercado Libre Venezuela';
+      siteId = 'MLV';
+    }
+
+    const pathname = decodeURIComponent(parsed.pathname);
+    let rawTitle = '';
+
+    // Pattern 1: /MLC-12345678-titulo-del-producto-_JM or /MCO-123456-titulo...
+    const matchArticulo = pathname.match(/\/M[A-Z]{2}[-_]?\d+[-_](.+?)(?:[-_]JM|\.html|\?|#|$)/i);
+    if (matchArticulo && matchArticulo[1]) {
+      rawTitle = matchArticulo[1];
+    }
+
+    // Pattern 2: /titulo-del-producto/p/MLC...
+    if (!rawTitle) {
+      const matchPdp = pathname.match(/\/([^\/]+)\/p\/M[A-Z]{2}\d+/i);
+      if (matchPdp && matchPdp[1]) {
+        rawTitle = matchPdp[1];
+      }
+    }
+
+    // Pattern 3: /p/MLC12345678
+    if (!rawTitle) {
+      const matchPonly = pathname.match(/\/p\/(M[A-Z]{2}\d+)/i);
+      if (matchPonly) {
+        rawTitle = `Artículo en ${siteName} (${matchPonly[1]})`;
+      }
+    }
+
+    // Pattern 4: /listado.mercadolibre.../busqueda
+    if (!rawTitle && hostname.startsWith('listado.')) {
+      const segs = pathname.split('/').filter(Boolean);
+      if (segs.length > 0) {
+        rawTitle = segs[0];
+      }
+    }
+
+    // Pattern 5: Generic slug from pathname
+    if (!rawTitle) {
+      const segs = pathname.split('/').filter(Boolean);
+      if (segs.length > 0) {
+        rawTitle = segs[segs.length - 1];
+        rawTitle = rawTitle.replace(/^M[A-Z]{2}[-_]?\d+[-_]?/i, '');
+        rawTitle = rawTitle.replace(/[-_]JM$/i, '');
+      }
+    }
+
+    // Clean up rawTitle into human readable title
+    let cleanTitle = rawTitle
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b(JM|pdp|filters|category)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const accentsMap = {
+      'audifonos': 'Audífonos',
+      'auriculares': 'Auriculares',
+      'inalambricos': 'Inalámbricos',
+      'inalambrico': 'Inalámbrico',
+      'sueter': 'Suéter',
+      'navideno': 'Navideño',
+      'navidena': 'Navideña',
+      'arbol': 'Árbol',
+      'cafe': 'Café',
+      'camara': 'Cámara',
+      'telefono': 'Teléfono',
+      'electronica': 'Electrónica',
+      'musica': 'Música',
+      'pantalla': 'Pantalla',
+      'bateria': 'Batería',
+      'optica': 'Óptica',
+      'lampara': 'Lámpara',
+      'articulo': 'Artículo',
+      'tws': 'TWS',
+      'led': 'LED',
+      'rgb': 'RGB',
+      'usb': 'USB',
+      'hd': 'HD',
+      '4k': '4K',
+      'ps5': 'PS5',
+      'ps4': 'PS4',
+      'pro': 'Pro',
+      'max': 'Max',
+      'plus': 'Plus',
+      'bluetooth': 'Bluetooth'
+    };
+
+    cleanTitle = cleanTitle
+      .split(' ')
+      .map(word => {
+        const lower = word.toLowerCase();
+        if (accentsMap[lower]) return accentsMap[lower];
+        if (word.length <= 2 && !['de', 'en', 'la', 'el', 'y', 'con', 'al', 'un', 'o'].includes(lower)) {
+          return word.toUpperCase();
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ')
+      .trim();
+
+    if (!cleanTitle) {
+      cleanTitle = 'Artículo en ' + siteName;
+    }
+
+    let image = null;
+    let categoryName = '';
+    try {
+      const discoveryRes = await axios.get(
+        `https://api.mercadolibre.com/sites/${siteId}/domain_discovery/search?q=${encodeURIComponent(cleanTitle.slice(0, 60))}`,
+        { timeout: 2500 }
+      );
+      if (discoveryRes.data && discoveryRes.data[0]) {
+        categoryName = discoveryRes.data[0].category_name || '';
+        const catId = discoveryRes.data[0].category_id;
+        if (catId) {
+          const catRes = await axios.get(`https://api.mercadolibre.com/categories/${catId}`, { timeout: 2500 });
+          if (catRes.data?.picture) {
+            image = catRes.data.picture;
+          }
+        }
+      }
+    } catch {}
+
+    if (!image) {
+      image = getReferentialImage(cleanTitle, categoryName);
+    }
+
+    return {
+      url: rawUrl,
+      title: cleanTitle,
+      description: `Artículo de ${siteName}`,
+      image,
+      siteName
+    };
+  } catch (err) {
+    console.error('Error in extractMercadoLibreData:', err);
+    return null;
+  }
+}
+
 // Endpoint: Scrape link preview (referential image, title, description)
 app.get('/api/preview', async (req, res) => {
   let targetUrl = req.query.url;
@@ -155,6 +395,17 @@ app.get('/api/preview', async (req, res) => {
       // continue to general scraping
     }
   }
+
+  // Specialized extractor for Mercado Libre
+  try {
+    const parsed = new URL(targetUrl);
+    if (/(?:mercadolibre|mercadolivre)\./i.test(parsed.hostname)) {
+      const meliData = await extractMercadoLibreData(targetUrl);
+      if (meliData) {
+        return res.json(meliData);
+      }
+    }
+  } catch {}
 
   // 1. Attempt primary scrape with custom browser headers
   try {
