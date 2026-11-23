@@ -577,6 +577,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
       }
 
+      // Refresh cards registry
+      loadCardsRegistry();
+
       // Set download QR button
       downloadQrBtn.onclick = () => {
         const a = document.createElement('a');
@@ -639,5 +642,174 @@ document.addEventListener('DOMContentLoaded', () => {
       copyShareUrlBtn.textContent = '¡Copiado! ✓';
     }
   });
+
+  // -------------------------------------------------------------
+  // Registro e Historial de Tarjetas Generadas
+  // -------------------------------------------------------------
+  const registryListContainer = document.getElementById('registryListContainer');
+  const registryCountBadge = document.getElementById('registryCountBadge');
+  const headerCardCount = document.getElementById('headerCardCount');
+  const refreshRegistryBtn = document.getElementById('refreshRegistryBtn');
+
+  async function loadCardsRegistry() {
+    if (!registryListContainer) return;
+
+    try {
+      const res = await fetch('/api/cards');
+      const data = await res.json();
+      const serverCards = data.cards || [];
+
+      // Combine with localStorage to ensure maximum persistence
+      const localStored = JSON.parse(localStorage.getItem('navidad_cards_history') || '[]');
+      const cardMap = new Map();
+
+      // Put server cards in map
+      serverCards.forEach(c => cardMap.set(c.id, c));
+      // Put local cards in map if not present
+      localStored.forEach(c => {
+        if (!cardMap.has(c.id)) {
+          cardMap.set(c.id, c);
+        }
+      });
+
+      const allCards = Array.from(cardMap.values()).sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      // Update badge counts
+      const countStr = `${allCards.length} ${allCards.length === 1 ? 'guardada' : 'guardadas'}`;
+      if (registryCountBadge) registryCountBadge.textContent = countStr;
+      if (headerCardCount) headerCardCount.textContent = allCards.length;
+
+      // Update local storage backup
+      localStorage.setItem('navidad_cards_history', JSON.stringify(allCards));
+
+      if (allCards.length === 0) {
+        registryListContainer.innerHTML = `
+          <div class="text-center py-10 px-4 border-2 border-dashed border-white/20 rounded-2xl">
+            <span class="text-3xl block mb-2 opacity-70">📜</span>
+            <p class="text-sm font-semibold text-slate-200">No hay tarjetas registradas todavía</p>
+            <p class="text-xs text-slate-400 mt-1">Crea tu primera tarjeta arriba y quedará guardada aquí para siempre.</p>
+          </div>
+        `;
+        return;
+      }
+
+      registryListContainer.innerHTML = '';
+
+      allCards.forEach(card => {
+        const itemElem = document.createElement('div');
+        itemElem.className = 'bg-stone-900/90 border border-white/20 hover:border-amber-400/60 rounded-2xl p-4 shadow-lg transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4';
+
+        // Format date
+        const dateObj = new Date(card.createdAt);
+        const dateFormatted = !isNaN(dateObj) 
+          ? dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : 'Fecha desconocida';
+
+        itemElem.innerHTML = `
+          <!-- Info de la Tarjeta -->
+          <div class="flex-grow min-w-0">
+            <div class="flex flex-wrap items-center gap-2 mb-1">
+              <span class="text-xs font-mono font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                ${escapeHtml(card.id)}
+              </span>
+              <span class="text-xs text-slate-400">
+                📅 ${dateFormatted}
+              </span>
+              <span class="text-xs bg-red-900/60 text-red-200 px-2 py-0.5 rounded-full border border-red-500/30">
+                🎁 ${card.itemCount || 0} ${(card.itemCount === 1 ? 'deseo' : 'deseos')}
+              </span>
+            </div>
+
+            <h4 class="text-base font-bold text-white truncate">
+              ${escapeHtml(card.title || 'Mis Deseos Navideños')}
+            </h4>
+
+            <div class="text-xs text-slate-300 mt-0.5 flex flex-wrap gap-x-4">
+              ${card.recipient ? `<span><strong>Para:</strong> ${escapeHtml(card.recipient)}</span>` : ''}
+              ${card.sender ? `<span><strong>De:</strong> ${escapeHtml(card.sender)}</span>` : ''}
+              <span class="text-emerald-400 font-medium">● Activa (sin caducidad)</span>
+            </div>
+          </div>
+
+          <!-- Acciones: Ver, Ver QR, Eliminar -->
+          <div class="flex-shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+            <a href="/card/${card.id}" target="_blank" class="bg-white/10 hover:bg-white/25 text-white font-medium text-xs px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center gap-1.5 shadow-sm" title="Ver la tarjeta navideña">
+              <span>👁️</span> <span class="hidden md:inline">Ver</span> Tarjeta
+            </a>
+
+            <button type="button" class="view-qr-btn bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm" title="Ver y descargar código QR">
+              <span>📱</span> <span class="hidden md:inline">Ver</span> QR
+            </button>
+
+            <button type="button" class="delete-card-btn bg-red-950/80 hover:bg-red-800 text-red-300 hover:text-white border border-red-600/40 text-xs px-2.5 py-2 rounded-xl transition-all flex items-center gap-1" title="Eliminar tarjeta">
+              <span>🗑️</span>
+            </button>
+          </div>
+        `;
+
+        // Event listener: View QR
+        const viewQrBtn = itemElem.querySelector('.view-qr-btn');
+        viewQrBtn.addEventListener('click', async () => {
+          await openQrModalForCard(card.id);
+        });
+
+        // Event listener: Delete Card
+        const deleteCardBtn = itemElem.querySelector('.delete-card-btn');
+        deleteCardBtn.addEventListener('click', async () => {
+          const confirmDel = confirm(`¿Estás seguro de que deseas eliminar permanentemente la tarjeta "${card.title || card.id}"? Esta acción no se puede deshacer.`);
+          if (!confirmDel) return;
+
+          try {
+            await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
+            
+            // Remove from local storage
+            const updatedLocal = allCards.filter(c => c.id !== card.id);
+            localStorage.setItem('navidad_cards_history', JSON.stringify(updatedLocal));
+
+            loadCardsRegistry();
+          } catch (err) {
+            console.error(err);
+            alert('Error al eliminar la tarjeta: ' + err.message);
+          }
+        });
+
+        registryListContainer.appendChild(itemElem);
+      });
+
+    } catch (err) {
+      console.error('Error cargando registro de tarjetas:', err);
+    }
+  }
+
+  async function openQrModalForCard(cardId) {
+    try {
+      const res = await fetch(`/api/cards/${cardId}`);
+      if (!res.ok) throw new Error('Tarjeta no encontrada');
+      const data = await res.json();
+
+      currentCardId = cardId;
+      openCardDirectBtn.href = `/card/${cardId}`;
+      if (downloadStandaloneBtn) {
+        downloadStandaloneBtn.href = `/api/download-card/${cardId}`;
+      }
+
+      // Generate or update QR
+      const selectedIp = modalIpSelector ? modalIpSelector.value : null;
+      await updateQrWithIp(selectedIp);
+
+      qrModal.classList.remove('hidden');
+    } catch (err) {
+      alert('No se pudo abrir el QR: ' + err.message);
+    }
+  }
+
+  if (refreshRegistryBtn) {
+    refreshRegistryBtn.addEventListener('click', loadCardsRegistry);
+  }
+
+  // Load registry on startup
+  loadCardsRegistry();
 
 });

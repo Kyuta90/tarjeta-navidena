@@ -478,6 +478,43 @@ app.post('/api/qr-custom', async (req, res) => {
   }
 });
 
+// Endpoint: Get all generated cards (Registry / History)
+app.get('/api/cards', (req, res) => {
+  const cards = readCards();
+  const list = Object.values(cards).map(c => ({
+    id: c.id,
+    title: c.title || 'Deseos Navideños',
+    recipient: c.recipient || '',
+    sender: c.sender || '',
+    theme: c.theme || 'classic-red',
+    itemCount: Array.isArray(c.items) ? c.items.length : 0,
+    items: c.items || [],
+    createdAt: c.createdAt || new Date().toISOString()
+  })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return res.json({
+    total: list.length,
+    cards: list
+  });
+});
+
+// Endpoint: Delete a card
+app.delete('/api/cards/:id', (req, res) => {
+  const cards = readCards();
+  const cardId = req.params.id;
+  if (!cards[cardId]) {
+    return res.status(404).json({ error: 'Tarjeta navideña no encontrada' });
+  }
+
+  delete cards[cardId];
+  saveCards(cards);
+
+  return res.json({
+    success: true,
+    message: `Tarjeta ${cardId} eliminada exitosamente.`
+  });
+});
+
 // Endpoint: Get Card by ID
 app.get('/api/cards/:id', (req, res) => {
   const cards = readCards();

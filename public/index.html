@@ -42,6 +42,9 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <a href="#registrySection" class="text-xs bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
+          <span>📚</span> <span class="hidden sm:inline">Registro de Tarjetas</span> (<span id="headerCardCount">0</span>)
+        </a>
         <button id="sampleItemsBtn" class="text-xs bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
           <span>✨</span> Cargar Ejemplos
         </button>
@@ -252,6 +255,34 @@
       </div>
 
     </div>
+
+    <!-- 3. Registro e Historial de Tarjetas Generadas -->
+    <section id="registrySection" class="mt-12 festive-glass rounded-3xl p-6 sm:p-8 border border-white/20 shadow-2xl">
+      <div class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4 mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📚</span>
+            <h3 class="text-xl sm:text-2xl font-bold text-amber-300">
+              Registro de Tarjetas Generadas
+            </h3>
+            <span id="registryCountBadge" class="bg-amber-400 text-stone-900 text-xs font-bold px-2.5 py-0.5 rounded-full shadow">
+              0 guardadas
+            </span>
+          </div>
+          <p class="text-xs text-red-200 mt-1">
+            Tus tarjetas se conservan permanentemente y no caducan. Puedes verlas, escanear su QR o eliminarlas cuando decidas.
+          </p>
+        </div>
+        <button id="refreshRegistryBtn" type="button" class="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm">
+          <span>🔄</span> Actualizar Registro
+        </button>
+      </div>
+
+      <!-- Contenedor del listado de tarjetas -->
+      <div id="registryListContainer" class="space-y-3">
+        <!-- Rellenado dinámicamente con las tarjetas creadas -->
+      </div>
+    </section>
 
   </main>
 

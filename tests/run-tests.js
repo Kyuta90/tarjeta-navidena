@@ -301,6 +301,63 @@ async function runTestSuite() {
     }
   });
 
+  // TEST 11: Registro e Historial de tarjetas generadas (GET /api/cards)
+  await test('11. Registro e Historial: listado de tarjetas generadas sin caducidad', async () => {
+    const res = await request({
+      hostname: 'localhost',
+      port: PORT,
+      path: '/api/cards',
+      method: 'GET'
+    });
+
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (!Array.isArray(res.data.cards)) throw new Error('No se devolvió la lista de tarjetas');
+    if (res.data.total === undefined || res.data.total < 1) {
+      throw new Error('El registro debería tener al menos 1 tarjeta guardada');
+    }
+  });
+
+  // TEST 12: Eliminación manual de tarjeta por decisión del usuario (DELETE /api/cards/:id)
+  await test('12. Eliminación manual: la tarjeta se conserva hasta que el usuario decida borrarla', async () => {
+    // 1. Crear una tarjeta temporal para borrar
+    const createTemp = await request({
+      hostname: 'localhost',
+      port: PORT,
+      path: '/api/cards',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, {
+      title: 'Tarjeta Temporal Para Eliminar',
+      items: [{ order: 1, url: 'https://example.com', title: 'Item temporal' }]
+    });
+
+    const tempId = createTemp.data.id;
+    if (!tempId) throw new Error('No se pudo crear la tarjeta temporal');
+
+    // 2. Eliminarla
+    const delRes = await request({
+      hostname: 'localhost',
+      port: PORT,
+      path: `/api/cards/${tempId}`,
+      method: 'DELETE'
+    });
+
+    if (delRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${delRes.status}`);
+    if (!delRes.data.success) throw new Error('No se confirmó la eliminación');
+
+    // 3. Verificar que ya no existe (404)
+    const checkRes = await request({
+      hostname: 'localhost',
+      port: PORT,
+      path: `/api/cards/${tempId}`,
+      method: 'GET'
+    });
+
+    if (checkRes.status !== 404) {
+      throw new Error(`Se esperaba 404 para tarjeta eliminada, recibido: ${checkRes.status}`);
+    }
+  });
+
   // RESUMEN FINAL
   console.log(`\n======================================================`);
   console.log(`📊 RESUMEN DE PRUEBAS:`);
