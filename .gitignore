@@ -6,6 +6,12 @@ node_modules/
 npm-debug.log*
 .env
 
+# Backups and temporary storage
+data/*.backup.json
+data/*.tmp
+data/uploads/
+!data/uploads/.gitkeep
+
 # OS Files
 .DS_Store
 Thumbs.db

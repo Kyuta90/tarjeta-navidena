@@ -9,12 +9,25 @@ const BASE_URL = `http://${HOST}:${PORT}`;
 let serverProcess = null;
 
 async function ensureServerRunning() {
+  let isUp = false;
   try {
-    await request({ hostname: HOST, port: PORT, path: '/', method: 'GET', timeout: 500 });
-  } catch (e) {
-    // Start local server in this session
+    const res = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
+    if (res.status === 200) isUp = true;
+  } catch (e) {}
+
+  if (!isUp) {
     serverProcess = fork(path.join(__dirname, '../server.js'), [], { stdio: 'inherit' });
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      try {
+        const ping = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
+        if (ping.status === 200) {
+          isUp = true;
+          break;
+        }
+      } catch (e) {}
+    }
+    if (!isUp) throw new Error('El servidor no respondió a tiempo en http://127.0.0.1:3000');
   }
 }
 
@@ -428,7 +441,7 @@ async function runTestSuite() {
 
     if (getRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${getRes.status}`);
     const savedItem = getRes.data.items[0];
-    if (!savedItem || savedItem.image !== base64Pixel) {
+    if (!savedItem || (!savedItem.image.startsWith('/uploads/') && savedItem.image !== base64Pixel)) {
       throw new Error('La imagen Base64 subida no se guardó o recuperó correctamente');
     }
 
@@ -479,6 +492,140 @@ async function runTestSuite() {
     if (!res2.data.image || !res2.data.image.startsWith('http')) {
       throw new Error(`Imagen no obtenida para ML México: "${res2.data.image}"`);
     }
+  });
+
+  // TEST 15: Diagnóstico y endpoints de Túnel Universal
+  await test('15. Endpoint de diagnóstico /ping y estado del túnel móvil', async () => {
+    const pingRes = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
+    if (pingRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${pingRes.status}`);
+    if (!pingRes.data.ok) throw new Error('El endpoint /ping no devolvió ok: true');
+    if (!pingRes.data.localNetworkIp) throw new Error('Falta localNetworkIp en /ping');
+
+    const tunnelRes = await request({ hostname: HOST, port: PORT, path: '/api/tunnel/status', method: 'GET' });
+    if (tunnelRes.status !== 200) throw new Error(`Status de túnel esperado 200, recibido: ${tunnelRes.status}`);
+    if (!tunnelRes.data.status) throw new Error('Falta status en /api/tunnel/status');
+  });
+
+  // TEST 16: Protección de seguridad SSRF
+  await test('16. Protección SSRF: bloqueo de peticiones a loopback, red local y esquemas inválidos', async () => {
+    // 1. Intentar preview hacia 127.0.0.1
+    const resLocal = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent('http://127.0.0.1:3000/ping')}`,
+      method: 'GET'
+    });
+    if (resLocal.status !== 400) throw new Error(`Se esperaba 400 por SSRF, recibido: ${resLocal.status}`);
+
+    // 2. Intentar preview hacia localhost
+    const resLocalhost = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent('http://localhost:3000/ping')}`,
+      method: 'GET'
+    });
+    if (resLocalhost.status !== 400) throw new Error(`Se esperaba 400 para localhost, recibido: ${resLocalhost.status}`);
+
+    // 3. Intentar preview hacia IP privada 192.168.1.1
+    const resPriv = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent('http://192.168.1.1/')}`,
+      method: 'GET'
+    });
+    if (resPriv.status !== 400) throw new Error(`Se esperaba 400 para IP privada, recibido: ${resPriv.status}`);
+  });
+
+  // TEST 17: Reserva y liberación de regalos (Claim & Unclaim)
+  await test('17. Reserva persistente de deseos: apartar regalo (claim) y liberar (unclaim)', async () => {
+    if (!createdCardId) throw new Error('No hay ID de tarjeta creada');
+    const getCard = await request({ hostname: HOST, port: PORT, path: `/api/cards/${createdCardId}`, method: 'GET' });
+    const targetItem = getCard.data.items[0];
+    if (!targetItem) throw new Error('La tarjeta no tiene artículos para probar reserva');
+
+    // Apartar regalo
+    const claimRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/cards/${createdCardId}/items/${targetItem.id}/claim`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, { claimedBy: 'Tía Claudia' });
+
+    if (claimRes.status !== 200) throw new Error(`Status esperado 200 al apartar regalo, recibido: ${claimRes.status}`);
+    if (!claimRes.data.success || !claimRes.data.item.claimed) {
+      throw new Error('No se confirmó la reserva del regalo');
+    }
+    if (claimRes.data.item.claimedBy !== 'Tía Claudia') {
+      throw new Error(`Nombre esperado "Tía Claudia", recibido: ${claimRes.data.item.claimedBy}`);
+    }
+
+    // Verificar persistencia al recargar la tarjeta
+    const verifyRes = await request({ hostname: HOST, port: PORT, path: `/api/cards/${createdCardId}`, method: 'GET' });
+    if (!verifyRes.data.items[0].claimed || verifyRes.data.items[0].claimedBy !== 'Tía Claudia') {
+      throw new Error('La reserva no persistió en la tarjeta');
+    }
+
+    // Liberar reserva (unclaim)
+    const unclaimRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/cards/${createdCardId}/items/${targetItem.id}/unclaim`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (unclaimRes.status !== 200) throw new Error(`Status esperado 200 al liberar, recibido: ${unclaimRes.status}`);
+    if (unclaimRes.data.item.claimed) throw new Error('El artículo sigue marcado como apartado tras unclaim');
+  });
+
+  // TEST 18: Tokens de administración y saneamiento contra XSS
+  await test('18. Token de administración (adminToken) y saneamiento XSS', async () => {
+    // 1. Crear tarjeta con campos potencialmente maliciosos
+    const xssPayload = {
+      title: 'Deseos <script>alert("xss")</script>',
+      recipient: 'Amigo" onmouseover="alert(1)',
+      sender: 'Carlos',
+      items: [
+        {
+          order: 1,
+          url: 'javascript:alert("bad")',
+          title: 'Regalo con script',
+          image: 'https://example.com/pic.jpg',
+          siteName: 'Tienda'
+        }
+      ]
+    };
+
+    const createRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: '/api/cards',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }, xssPayload);
+
+    if (createRes.status !== 200) throw new Error(`Status esperado 200, recibido: ${createRes.status}`);
+    const adminToken = createRes.data.adminToken;
+    const cardId = createRes.data.id;
+    if (!adminToken) throw new Error('No se devolvió adminToken al crear la tarjeta');
+
+    // 2. Comprobar que en GET /api/cards/:id el adminToken se oculta al público
+    const publicGet = await request({ hostname: HOST, port: PORT, path: `/api/cards/${cardId}`, method: 'GET' });
+    if (publicGet.data.adminToken) throw new Error('El adminToken no debe ser visible públicamente en GET /api/cards/:id');
+    // Verificar que la URL javascript: fue saneada a vacía
+    if (publicGet.data.items[0].url.startsWith('javascript:')) {
+      throw new Error('La URL maliciosa no fue saneada');
+    }
+
+    // 3. Eliminar tarjeta usando el token de administración
+    const delRes = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/cards/${cardId}`,
+      method: 'DELETE',
+      headers: { 'X-Admin-Token': adminToken }
+    });
+    if (delRes.status !== 200) throw new Error(`No se pudo eliminar con adminToken válido: ${delRes.status}`);
   });
 
   // RESUMEN FINAL
