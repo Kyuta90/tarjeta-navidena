@@ -1,125 +1,153 @@
+'use strict';
+
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const cheerio = require('cheerio');
 const axios = require('axios');
 const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
+
+const { CardStore } = require('./lib/storage');
+const { createUploads } = require('./lib/uploads');
+const { getAllValidNetworkIps, getLocalNetworkIp, isLocalOwner, isLocalOrPrivateHost } = require('./lib/network');
+const tunnel = require('./lib/tunnel');
+const {
+  safeAxiosOptions,
+  assertPublicHttpUrl,
+  sanitizeCardInput,
+  escapeHtml,
+  safeJsonForHtml,
+  newToken,
+  safeEqual,
+  cleanText,
+  cleanHttpUrl,
+  DEFAULT_IMAGE
+} = require('./lib/security');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Storage & Uploads paths
+const dataDir = path.join(__dirname, 'data');
+const uploadsDir = path.join(dataDir, 'uploads');
+const cardsFilePath = path.join(dataDir, 'cards.json');
+
+const cardStore = new CardStore(cardsFilePath);
+const uploads = createUploads(uploadsDir);
+
+// -------------------------------------------------------------
+// Middlewares
+// -------------------------------------------------------------
+app.set('trust proxy', 1);
+
+app.use(compression());
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Permitir fuentes locales, data: images y Web Audio API sin bloqueo
+    crossOriginEmbedderPolicy: false
+  })
+);
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure data directory exists
-const dataDir = path.join(__dirname, 'data');
-const cardsFilePath = path.join(dataDir, 'cards.json');
+// Static files
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
 
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-if (!fs.existsSync(cardsFilePath)) {
-  fs.writeFileSync(cardsFilePath, JSON.stringify({}, null, 2), 'utf-8');
-}
+// Rate limiters
+const previewLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes de vista previa. Intenta nuevamente en un minuto.' }
+});
 
-// Helpers to read/write cards storage
-function readCards() {
-  try {
-    const raw = fs.readFileSync(cardsFilePath, 'utf-8');
-    return JSON.parse(raw || '{}');
-  } catch (err) {
-    console.error('Error reading cards file:', err);
-    return {};
-  }
-}
+const cardsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Límite de creación de tarjetas alcanzado. Espera unos minutos.' }
+});
 
-function saveCards(cards) {
-  try {
-    fs.writeFileSync(cardsFilePath, JSON.stringify(cards, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error saving cards file:', err);
-  }
-}
-
-// Helper to discover real physical network IPs (filtering out VirtualBox, VMware, Docker, etc.)
-function getAllValidNetworkIps() {
-  const interfaces = os.networkInterfaces();
-  const candidates = [];
-
-  for (const [name, addrs] of Object.entries(interfaces)) {
-    const lowerName = name.toLowerCase();
-
-    // Skip virtual machine or container adapters
-    if (
-      lowerName.includes('virtualbox') ||
-      lowerName.includes('vmware') ||
-      lowerName.includes('vethernet') ||
-      lowerName.includes('wsl') ||
-      lowerName.includes('loopback')
-    ) {
-      continue;
-    }
-
-    for (const iface of addrs) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        // Skip APIPA (169.254.x.x) and VirtualBox host-only network (192.168.56.x)
-        if (iface.address.startsWith('169.254.') || iface.address.startsWith('192.168.56.')) {
-          continue;
-        }
-
-        let priority = 10;
-        let typeLabel = 'Red Local';
-
-        // Wi-Fi is ideal for mobile scanning
-        if (lowerName.includes('wi-fi') || lowerName.includes('wireless') || lowerName.includes('wlan')) {
-          priority = 100;
-          typeLabel = 'Wi-Fi (Recomendado para celulares)';
-        } else if (lowerName.includes('ethernet')) {
-          priority = 50;
-          typeLabel = 'Ethernet (Cable)';
-        }
-
-        candidates.push({
-          name,
-          ip: iface.address,
-          label: `${iface.address} - ${typeLabel}`,
-          priority
-        });
-      }
-    }
-  }
-
-  // Sort descending by priority so Wi-Fi is default
-  candidates.sort((a, b) => b.priority - a.priority);
-  return candidates;
-}
-
-// Helper to get primary Local Area Network IP for mobile phone scanning
-function getLocalNetworkIp() {
-  const ips = getAllValidNetworkIps();
-  if (ips.length > 0) {
-    return ips[0].ip;
-  }
-  return 'localhost';
-}
-
-// Endpoint: Get all available network IPs
-app.get('/api/network-ips', (req, res) => {
-  const ips = getAllValidNetworkIps();
+// -------------------------------------------------------------
+// Diagnostic & Tunnel Endpoints
+// -------------------------------------------------------------
+app.get('/ping', (req, res) => {
   res.json({
-    defaultIp: ips.length > 0 ? ips[0].ip : 'localhost',
-    port: PORT,
-    candidates: ips
+    ok: true,
+    timestamp: new Date().toISOString(),
+    localNetworkIp: getLocalNetworkIp(),
+    tunnel: tunnel.getState()
   });
 });
 
-// Helper to match referential HD product image by keyword
+app.get('/api/tunnel/status', (req, res) => {
+  res.json(tunnel.getState());
+});
+
+app.post('/api/tunnel/start', async (req, res) => {
+  try {
+    const state = await tunnel.start(PORT);
+    res.json(state);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/tunnel/stop', (req, res) => {
+  const state = tunnel.stop();
+  res.json(state);
+});
+
+// Helper to determine the best public base URL
+function getBaseUrl(req, requestedIp) {
+  const tunnelState = tunnel.getState();
+  if (tunnelState.status === 'running' && tunnelState.url) {
+    return tunnelState.url;
+  }
+  if (process.env.PUBLIC_URL) {
+    return process.env.PUBLIC_URL.replace(/\/$/, '');
+  }
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return process.env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+  }
+
+  const hostHeader = req.get('host') || '';
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+
+  // If request arrives from outside via custom domain or proxy
+  if (hostHeader && !isLocalOrPrivateHost(hostHeader.split(':')[0])) {
+    return `${protocol}://${hostHeader}`;
+  }
+
+  const ip = (requestedIp && requestedIp !== 'localhost') ? requestedIp : getLocalNetworkIp();
+  return (ip !== 'localhost') ? `http://${ip}:${PORT}` : `http://localhost:${PORT}`;
+}
+
+// Endpoint: Get available network IPs & Tunnel status
+app.get('/api/network-ips', (req, res) => {
+  const ips = getAllValidNetworkIps();
+  const tunnelState = tunnel.getState();
+  res.json({
+    defaultIp: ips.length > 0 ? ips[0].ip : 'localhost',
+    port: PORT,
+    candidates: ips,
+    tunnel: tunnelState,
+    isLocalOwner: isLocalOwner(req)
+  });
+});
+
+// -------------------------------------------------------------
+// Referential Image Matcher (Unsplash)
+// -------------------------------------------------------------
 function getReferentialImage(title, categoryName = '') {
   const text = `${title} ${categoryName}`.toLowerCase();
 
@@ -181,10 +209,12 @@ function getReferentialImage(title, categoryName = '') {
     return 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=700&auto=format&fit=crop&q=80';
   }
 
-  return '/images/default-gift.svg';
+  return DEFAULT_IMAGE;
 }
 
-// Specialized metadata extractor for Mercado Libre links
+// -------------------------------------------------------------
+// Mercado Libre Metadata Extractor
+// -------------------------------------------------------------
 async function extractMercadoLibreData(rawUrl) {
   try {
     const parsed = new URL(rawUrl);
@@ -194,188 +224,95 @@ async function extractMercadoLibreData(rawUrl) {
 
     let siteName = 'Mercado Libre';
     let siteId = 'MLC';
-    if (hostname.endsWith('.cl')) {
-      siteName = 'Mercado Libre Chile';
-      siteId = 'MLC';
-    } else if (hostname.endsWith('.com.ar')) {
-      siteName = 'Mercado Libre Argentina';
-      siteId = 'MLA';
-    } else if (hostname.endsWith('.com.mx')) {
-      siteName = 'Mercado Libre México';
-      siteId = 'MLM';
-    } else if (hostname.endsWith('.com.co')) {
-      siteName = 'Mercado Libre Colombia';
-      siteId = 'MCO';
-    } else if (hostname.endsWith('.com.pe')) {
-      siteName = 'Mercado Libre Perú';
-      siteId = 'MPE';
-    } else if (hostname.endsWith('.com.uy')) {
-      siteName = 'Mercado Libre Uruguay';
-      siteId = 'MLU';
-    } else if (hostname.endsWith('.com.br')) {
-      siteName = 'Mercado Livre Brasil';
-      siteId = 'MLB';
-    } else if (hostname.endsWith('.com.ec')) {
-      siteName = 'Mercado Libre Ecuador';
-      siteId = 'MEC';
-    } else if (hostname.endsWith('.com.ve')) {
-      siteName = 'Mercado Libre Venezuela';
-      siteId = 'MLV';
-    }
+    if (hostname.endsWith('.cl')) { siteName = 'Mercado Libre Chile'; siteId = 'MLC'; }
+    else if (hostname.endsWith('.com.ar')) { siteName = 'Mercado Libre Argentina'; siteId = 'MLA'; }
+    else if (hostname.endsWith('.com.mx')) { siteName = 'Mercado Libre México'; siteId = 'MLM'; }
+    else if (hostname.endsWith('.com.co')) { siteName = 'Mercado Libre Colombia'; siteId = 'MCO'; }
+    else if (hostname.endsWith('.com.pe')) { siteName = 'Mercado Libre Perú'; siteId = 'MPE'; }
+    else if (hostname.endsWith('.com.uy')) { siteName = 'Mercado Libre Uruguay'; siteId = 'MLU'; }
+    else if (hostname.endsWith('.com.br')) { siteName = 'Mercado Livre Brasil'; siteId = 'MLB'; }
+    else if (hostname.endsWith('.com.ec')) { siteName = 'Mercado Libre Ecuador'; siteId = 'MEC'; }
+    else if (hostname.endsWith('.com.ve')) { siteName = 'Mercado Libre Venezuela'; siteId = 'MLV'; }
 
     const pathname = decodeURIComponent(parsed.pathname);
     let rawTitle = '';
 
-    // Pattern 1: /MLC-12345678-titulo-del-producto-_JM or /MCO-123456-titulo...
     const matchArticulo = pathname.match(/\/M[A-Z]{2}[-_]?\d+[-_](.+?)(?:[-_]JM|\.html|\?|#|$)/i);
-    if (matchArticulo && matchArticulo[1]) {
-      rawTitle = matchArticulo[1];
-    }
+    if (matchArticulo && matchArticulo[1]) rawTitle = matchArticulo[1];
 
-    // Pattern 2: /titulo-del-producto/p/MLC...
     if (!rawTitle) {
       const matchPdp = pathname.match(/\/([^\/]+)\/p\/M[A-Z]{2}\d+/i);
-      if (matchPdp && matchPdp[1]) {
-        rawTitle = matchPdp[1];
-      }
+      if (matchPdp && matchPdp[1]) rawTitle = matchPdp[1];
     }
-
-    // Pattern 3: /p/MLC12345678
     if (!rawTitle) {
       const matchPonly = pathname.match(/\/p\/(M[A-Z]{2}\d+)/i);
-      if (matchPonly) {
-        rawTitle = `Artículo en ${siteName} (${matchPonly[1]})`;
-      }
+      if (matchPonly) rawTitle = `Artículo en ${siteName} (${matchPonly[1]})`;
     }
-
-    // Pattern 4: /listado.mercadolibre.../busqueda
-    if (!rawTitle && hostname.startsWith('listado.')) {
-      const segs = pathname.split('/').filter(Boolean);
-      if (segs.length > 0) {
-        rawTitle = segs[0];
-      }
-    }
-
-    // Pattern 5: Generic slug from pathname
     if (!rawTitle) {
       const segs = pathname.split('/').filter(Boolean);
       if (segs.length > 0) {
-        rawTitle = segs[segs.length - 1];
-        rawTitle = rawTitle.replace(/^M[A-Z]{2}[-_]?\d+[-_]?/i, '');
-        rawTitle = rawTitle.replace(/[-_]JM$/i, '');
+        rawTitle = segs[segs.length - 1].replace(/^M[A-Z]{2}[-_]?\d+[-_]?/i, '').replace(/[-_]JM$/i, '');
       }
     }
 
-    // Clean up rawTitle into human readable title
-    let cleanTitle = rawTitle
-      .replace(/[-_]+/g, ' ')
-      .replace(/\b(JM|pdp|filters|category)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    let cleanTitle = rawTitle.replace(/[-_]+/g, ' ').replace(/\b(JM|pdp|filters|category)\b/gi, '').replace(/\s+/g, ' ').trim();
 
     const accentsMap = {
-      'audifonos': 'Audífonos',
-      'auriculares': 'Auriculares',
-      'inalambricos': 'Inalámbricos',
-      'inalambrico': 'Inalámbrico',
-      'sueter': 'Suéter',
-      'navideno': 'Navideño',
-      'navidena': 'Navideña',
-      'arbol': 'Árbol',
-      'cafe': 'Café',
-      'camara': 'Cámara',
-      'telefono': 'Teléfono',
-      'electronica': 'Electrónica',
-      'musica': 'Música',
-      'pantalla': 'Pantalla',
-      'bateria': 'Batería',
-      'optica': 'Óptica',
-      'lampara': 'Lámpara',
-      'articulo': 'Artículo',
-      'tws': 'TWS',
-      'led': 'LED',
-      'rgb': 'RGB',
-      'usb': 'USB',
-      'hd': 'HD',
-      '4k': '4K',
-      'ps5': 'PS5',
-      'ps4': 'PS4',
-      'pro': 'Pro',
-      'max': 'Max',
-      'plus': 'Plus',
-      'bluetooth': 'Bluetooth'
+      audifonos: 'Audífonos', auriculares: 'Auriculares', inalambricos: 'Inalámbricos', inalambrico: 'Inalámbrico',
+      sueter: 'Suéter', navideno: 'Navideño', navidena: 'Navideña', arbol: 'Árbol', cafe: 'Café', camara: 'Cámara',
+      telefono: 'Teléfono', electronica: 'Electrónica', musica: 'Música', pantalla: 'Pantalla', bateria: 'Batería',
+      optica: 'Óptica', lampara: 'Lámpara', tws: 'TWS', led: 'LED', rgb: 'RGB', usb: 'USB', hd: 'HD', '4k': '4K',
+      ps5: 'PS5', ps4: 'PS4', pro: 'Pro', max: 'Max', plus: 'Plus', bluetooth: 'Bluetooth'
     };
 
-    cleanTitle = cleanTitle
-      .split(' ')
-      .map(word => {
-        const lower = word.toLowerCase();
-        if (accentsMap[lower]) return accentsMap[lower];
-        if (word.length <= 2 && !['de', 'en', 'la', 'el', 'y', 'con', 'al', 'un', 'o'].includes(lower)) {
-          return word.toUpperCase();
-        }
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      })
-      .join(' ')
-      .trim();
+    cleanTitle = cleanTitle.split(' ').map(word => {
+      const lower = word.toLowerCase();
+      if (accentsMap[lower]) return accentsMap[lower];
+      if (word.length <= 2 && !['de', 'en', 'la', 'el', 'y', 'con', 'al', 'un', 'o'].includes(lower)) return word.toUpperCase();
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ').trim();
 
-    if (!cleanTitle) {
-      cleanTitle = 'Artículo en ' + siteName;
-    }
+    if (!cleanTitle) cleanTitle = 'Artículo en ' + siteName;
 
     let image = null;
     let categoryName = '';
     try {
       const discoveryRes = await axios.get(
         `https://api.mercadolibre.com/sites/${siteId}/domain_discovery/search?q=${encodeURIComponent(cleanTitle.slice(0, 60))}`,
-        { timeout: 2500 }
+        { ...safeAxiosOptions, timeout: 2500 }
       );
       if (discoveryRes.data && discoveryRes.data[0]) {
         categoryName = discoveryRes.data[0].category_name || '';
         const catId = discoveryRes.data[0].category_id;
         if (catId) {
-          const catRes = await axios.get(`https://api.mercadolibre.com/categories/${catId}`, { timeout: 2500 });
-          if (catRes.data?.picture) {
-            image = catRes.data.picture;
-          }
+          const catRes = await axios.get(`https://api.mercadolibre.com/categories/${catId}`, { ...safeAxiosOptions, timeout: 2500 });
+          if (catRes.data?.picture) image = catRes.data.picture;
         }
       }
     } catch {}
 
-    if (!image) {
-      image = getReferentialImage(cleanTitle, categoryName);
-    }
+    if (!image) image = getReferentialImage(cleanTitle, categoryName);
 
-    return {
-      url: rawUrl,
-      title: cleanTitle,
-      description: `Artículo de ${siteName}`,
-      image,
-      siteName
-    };
+    return { url: rawUrl, title: cleanTitle, description: `Artículo de ${siteName}`, image, siteName };
   } catch (err) {
-    console.error('Error in extractMercadoLibreData:', err);
     return null;
   }
 }
 
-// Endpoint: Scrape link preview (referential image, title, description)
-app.get('/api/preview', async (req, res) => {
+// -------------------------------------------------------------
+// Endpoint: Scrape link preview (Protected against SSRF)
+// -------------------------------------------------------------
+app.get('/api/preview', previewLimiter, async (req, res) => {
   let targetUrl = req.query.url;
-  if (!targetUrl) {
-    return res.status(400).json({ error: 'Falta el parámetro url' });
-  }
+  if (!targetUrl) return res.status(400).json({ error: 'Falta el parámetro url' });
 
-  // Normalize URL
   targetUrl = targetUrl.trim();
-  if (!/^https?:\/\//i.test(targetUrl)) {
-    targetUrl = 'https://' + targetUrl;
-  }
+  if (!/^https?:\/\//i.test(targetUrl)) targetUrl = 'https://' + targetUrl;
 
   try {
-    new URL(targetUrl);
-  } catch {
-    return res.status(400).json({ error: 'URL inválida' });
+    assertPublicHttpUrl(targetUrl);
+  } catch (err) {
+    return res.status(400).json({ error: err.message || 'URL inválida o restringida' });
   }
 
   // Quick check: If the URL directly points to an image
@@ -391,9 +328,7 @@ app.get('/api/preview', async (req, res) => {
         image: targetUrl,
         siteName: parsed.hostname
       });
-    } catch {
-      // continue to general scraping
-    }
+    } catch {}
   }
 
   // Specialized extractor for Mercado Libre
@@ -401,25 +336,19 @@ app.get('/api/preview', async (req, res) => {
     const parsed = new URL(targetUrl);
     if (/(?:mercadolibre|mercadolivre)\./i.test(parsed.hostname)) {
       const meliData = await extractMercadoLibreData(targetUrl);
-      if (meliData) {
-        return res.json(meliData);
-      }
+      if (meliData) return res.json(meliData);
     }
   } catch {}
 
-  // 1. Attempt primary scrape with custom browser headers
+  // 1. Primary scrape with browser headers & SSRF protection
   try {
     const response = await axios.get(targetUrl, {
+      ...safeAxiosOptions,
       timeout: 7000,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept':
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
       },
       maxRedirects: 5
     });
@@ -429,7 +358,6 @@ app.get('/api/preview', async (req, res) => {
       const $ = cheerio.load(html);
       const parsedUrl = new URL(targetUrl);
 
-      // Extract title
       let title =
         $('meta[property="og:title"]').attr('content') ||
         $('meta[name="twitter:title"]').attr('content') ||
@@ -437,17 +365,15 @@ app.get('/api/preview', async (req, res) => {
         $('title').text() ||
         $('h1').first().text() ||
         parsedUrl.hostname;
-      title = title.trim();
+      title = (title || '').trim();
 
-      // Extract description
       let description =
         $('meta[property="og:description"]').attr('content') ||
         $('meta[name="twitter:description"]').attr('content') ||
         $('meta[name="description"]').attr('content') ||
         '';
-      description = description.trim();
+      description = (description || '').trim();
 
-      // Extract image
       let image =
         $('meta[property="og:image:secure_url"]').attr('content') ||
         $('meta[property="og:image"]').attr('content') ||
@@ -457,7 +383,6 @@ app.get('/api/preview', async (req, res) => {
         $('meta[itemprop="image"]').attr('content') ||
         '';
 
-      // Fallback: check Schema.org JSON-LD
       if (!image) {
         $('script[type="application/ld+json"]').each((_, elem) => {
           try {
@@ -466,9 +391,7 @@ app.get('/api/preview', async (req, res) => {
               if (!obj) return null;
               if (obj.image) {
                 if (typeof obj.image === 'string') return obj.image;
-                if (Array.isArray(obj.image) && obj.image.length > 0) {
-                  return typeof obj.image[0] === 'string' ? obj.image[0] : obj.image[0].url;
-                }
+                if (Array.isArray(obj.image) && obj.image.length > 0) return typeof obj.image[0] === 'string' ? obj.image[0] : obj.image[0].url;
                 if (obj.image.url) return obj.image.url;
               }
               return null;
@@ -479,31 +402,11 @@ app.get('/api/preview', async (req, res) => {
         });
       }
 
-      // Fallback: first significant img on page
-      if (!image) {
-        $('img').each((_, elem) => {
-          const src = $(elem).attr('src') || $(elem).attr('data-src');
-          if (src && !image) {
-            // Avoid tiny icons, tracking pixels, badges
-            const width = parseInt($(elem).attr('width') || '100', 10);
-            const height = parseInt($(elem).attr('height') || '100', 10);
-            if (width >= 80 && height >= 80 && !src.includes('logo') && !src.includes('icon')) {
-              image = src;
-            }
-          }
-        });
-      }
-
-      // Resolve relative image URLs to absolute
       if (image && !/^https?:\/\//i.test(image)) {
-        try {
-          image = new URL(image, targetUrl).href;
-        } catch {}
+        try { image = new URL(image, targetUrl).href; } catch {}
       }
 
-      const siteName =
-        $('meta[property="og:site_name"]').attr('content') ||
-        parsedUrl.hostname.replace(/^www\./, '');
+      const siteName = $('meta[property="og:site_name"]').attr('content') || parsedUrl.hostname.replace(/^www\./, '');
 
       if (image) {
         return res.json({
@@ -515,17 +418,15 @@ app.get('/api/preview', async (req, res) => {
         });
       }
     }
-  } catch (directErr) {
-    console.log(`Direct scrape failed for ${targetUrl} (${directErr.message}). Trying Microlink fallback...`);
-  }
+  } catch (err) {}
 
-  // 2. Fallback to public Microlink API (handles JS-rendered pages and bot-protected sites)
+  // 2. Fallback to public Microlink API
   try {
     const microlinkRes = await axios.get(
       `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}`,
-      { timeout: 7000 }
+      { ...safeAxiosOptions, timeout: 6000 }
     );
-    if (microlinkRes.data && microlinkRes.data.status === 'success' && microlinkRes.data.data) {
+    if (microlinkRes.data?.status === 'success' && microlinkRes.data.data) {
       const data = microlinkRes.data.data;
       const parsedUrl = new URL(targetUrl);
       const img = data.image?.url || data.logo?.url || null;
@@ -533,22 +434,20 @@ app.get('/api/preview', async (req, res) => {
         url: targetUrl,
         title: data.title || parsedUrl.hostname,
         description: data.description || '',
-        image: img || '/images/default-gift.svg',
+        image: img || DEFAULT_IMAGE,
         siteName: data.publisher || parsedUrl.hostname.replace(/^www\./, '')
       });
     }
-  } catch (microlinkErr) {
-    console.log(`Microlink fallback failed (${microlinkErr.message})`);
-  }
+  } catch {}
 
-  // 3. Graceful fallback if scraping didn't yield an image
+  // 3. Fallback referencial
   try {
     const parsedUrl = new URL(targetUrl);
     return res.json({
       url: targetUrl,
       title: parsedUrl.hostname.replace(/^www\./, '') + ' - Artículo de regalo',
       description: 'Enlace guardado en la lista de deseos navideños',
-      image: '/images/default-gift.svg',
+      image: DEFAULT_IMAGE,
       siteName: parsedUrl.hostname.replace(/^www\./, ''),
       needsManualImage: true
     });
@@ -557,94 +456,68 @@ app.get('/api/preview', async (req, res) => {
       url: targetUrl,
       title: 'Regalo Navideño',
       description: '',
-      image: '/images/default-gift.svg',
+      image: DEFAULT_IMAGE,
       siteName: 'Enlace web',
       needsManualImage: true
     });
   }
 });
 
-// Endpoint: Create a new Christmas Wishlist Card
-app.post('/api/cards', async (req, res) => {
+// -------------------------------------------------------------
+// Card Endpoints: Create, Get, Update, Claim, Delete
+// -------------------------------------------------------------
+app.post('/api/cards', cardsLimiter, async (req, res) => {
   try {
-    const {
-      title,
-      recipient,
-      sender,
-      message,
-      theme,
-      items
-    } = req.body;
-
-    if (!Array.isArray(items) || items.length === 0) {
+    const sanitized = sanitizeCardInput(req.body);
+    if (sanitized.items.length === 0) {
       return res.status(400).json({ error: 'Debes incluir al menos un enlace o regalo en la lista.' });
     }
 
-    // Generate unique card ID
-    const id = 'navidad-' + crypto.randomBytes(3).toString('hex');
+    // Persist any uploaded base64 images as disk files
+    sanitized.items.forEach(it => {
+      it.image = uploads.normalizeItemImage(it.image);
+    });
+
+    const id = 'navidad-' + crypto.randomBytes(4).toString('hex');
+    const adminToken = newToken();
     const createdAt = new Date().toISOString();
 
     const cardData = {
       id,
-      title: (title && title.trim()) ? title.trim() : 'Mis Deseos Navideños 🎄',
-      recipient: (recipient && recipient.trim()) ? recipient.trim() : '',
-      sender: (sender && sender.trim()) ? sender.trim() : '',
-      message: (message && message.trim()) ? message.trim() : '',
-      theme: theme || 'classic-red', // classic-red, winter-night, forest-gold
-      items: items.map((it, idx) => ({
-        id: it.id || `item-${idx + 1}`,
-        order: idx + 1,
-        url: it.url,
-        title: it.title || `Deseo #${idx + 1}`,
-        description: it.description || '',
-        image: it.image || '/images/default-gift.svg',
-        siteName: it.siteName || ''
-      })),
-      createdAt
+      adminToken,
+      ...sanitized,
+      createdAt,
+      updatedAt: createdAt
     };
 
-    // Save to storage
-    const cards = readCards();
-    cards[id] = cardData;
-    saveCards(cards);
+    cardStore.set(id, cardData);
 
-    // Build URLs (Auto-detect Render or Cloud hosting vs Local)
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const hostHeader = req.get('host') || '';
-    const isCloudHost = process.env.RENDER || process.env.RENDER_EXTERNAL_URL || 
-      (hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1') && !hostHeader.includes('192.168.') && !hostHeader.includes('10.'));
+    // Compute URLs
+    const baseUrl = getBaseUrl(req, req.body.selectedIp);
+    const localUrl = `http://localhost:${PORT}/card/${id}`;
+    const lanUrl = `http://${getLocalNetworkIp()}:${PORT}/card/${id}`;
+    const qrTargetUrl = `${baseUrl}/card/${id}`;
 
-    let localUrl = `http://localhost:${PORT}/card/${id}`;
-    let lanUrl = `http://${getLocalNetworkIp()}:${PORT}/card/${id}`;
-    let qrTargetUrl;
-
-    if (isCloudHost) {
-      const publicBase = process.env.RENDER_EXTERNAL_URL || `${protocol}://${hostHeader}`;
-      qrTargetUrl = `${publicBase}/card/${id}`;
-      localUrl = qrTargetUrl;
-      lanUrl = qrTargetUrl;
-    } else {
-      const requestedIp = req.body.selectedIp;
-      const lanIp = (requestedIp && requestedIp !== 'localhost') ? requestedIp : getLocalNetworkIp();
-      lanUrl = `http://${lanIp}:${PORT}/card/${id}`;
-      qrTargetUrl = lanIp !== 'localhost' ? lanUrl : localUrl;
-    }
-
-    // Generate QR Code as DataURL with Christmas colors
+    // Generate festive QR code
     const qrCodeDataUrl = await QRCode.toDataURL(qrTargetUrl, {
       width: 450,
       margin: 2,
       color: {
-        dark: '#991b1b', // Festive dark red
+        dark: '#991b1b',
         light: '#ffffff'
       },
       errorCorrectionLevel: 'M'
     });
 
+    // Public card object without secret admin token
+    const publicCard = { ...cardData };
+    delete publicCard.adminToken;
+
     return res.json({
       success: true,
       id,
-      card: cardData,
+      adminToken,
+      card: publicCard,
       localUrl,
       lanUrl,
       qrTargetUrl,
@@ -660,79 +533,65 @@ app.post('/api/cards', async (req, res) => {
 app.post('/api/qr', async (req, res) => {
   try {
     const { cardId, selectedIp } = req.body;
-    if (!cardId) {
-      return res.status(400).json({ error: 'Falta cardId' });
+    if (!cardId) return res.status(400).json({ error: 'Falta cardId' });
+
+    let baseUrl = getBaseUrl(req, selectedIp);
+    if (selectedIp === 'localhost') {
+      baseUrl = `http://localhost:${PORT}`;
+    } else if (selectedIp && selectedIp.startsWith('http')) {
+      baseUrl = selectedIp.replace(/\/$/, '');
     }
 
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const hostHeader = req.get('host') || '';
-    const isCloudHost = process.env.RENDER || process.env.RENDER_EXTERNAL_URL || 
-      (hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1') && !hostHeader.includes('192.168.') && !hostHeader.includes('10.'));
-
-    let targetUrl;
-    if (isCloudHost) {
-      const publicBase = process.env.RENDER_EXTERNAL_URL || `${protocol}://${hostHeader}`;
-      targetUrl = `${publicBase}/card/${cardId}`;
-    } else {
-      const targetIp = selectedIp || getLocalNetworkIp();
-      targetUrl = targetIp !== 'localhost'
-        ? `http://${targetIp}:${PORT}/card/${cardId}`
-        : `http://localhost:${PORT}/card/${cardId}`;
-    }
-
+    const targetUrl = `${baseUrl}/card/${cardId}`;
     const qrCodeDataUrl = await QRCode.toDataURL(targetUrl, {
       width: 450,
       margin: 2,
-      color: {
-        dark: '#991b1b',
-        light: '#ffffff'
-      },
+      color: { dark: '#991b1b', light: '#ffffff' },
       errorCorrectionLevel: 'M'
     });
 
-    return res.json({
-      success: true,
-      targetUrl,
-      qrCodeDataUrl
-    });
+    return res.json({ success: true, targetUrl, qrCodeDataUrl });
   } catch (err) {
-    console.error('Error generating QR:', err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// Endpoint: Generate QR for an arbitrary custom URL (public tunnel, ngrok, etc.)
+// Endpoint: Generate QR for arbitrary custom URL
 app.post('/api/qr-custom', async (req, res) => {
   try {
     const { targetUrl } = req.body;
-    if (!targetUrl) {
-      return res.status(400).json({ error: 'Falta targetUrl' });
-    }
+    if (!targetUrl) return res.status(400).json({ error: 'Falta targetUrl' });
 
     const qrCodeDataUrl = await QRCode.toDataURL(targetUrl, {
       width: 450,
       margin: 2,
-      color: {
-        dark: '#991b1b',
-        light: '#ffffff'
-      },
+      color: { dark: '#991b1b', light: '#ffffff' },
       errorCorrectionLevel: 'M'
     });
 
-    res.json({
-      success: true,
-      targetUrl,
-      qrCodeDataUrl
-    });
+    return res.json({ success: true, targetUrl, qrCodeDataUrl });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// Endpoint: Get all generated cards (Registry / History)
+// Endpoint: List cards (filtered if not local owner)
 app.get('/api/cards', (req, res) => {
-  const cards = readCards();
-  const list = Object.values(cards).map(c => ({
+  const allCards = cardStore.all();
+  const filterIds = req.query.ids ? String(req.query.ids).split(',').map(s => s.trim()) : null;
+  const isOwner = isLocalOwner(req);
+
+  let list = Object.values(allCards);
+
+  if (filterIds && filterIds.length > 0) {
+    const set = new Set(filterIds);
+    list = list.filter(c => set.has(c.id));
+  } else if (!isOwner) {
+    // If remote visitor and no explicit ID filter provided, return empty to prevent global scraping
+    list = [];
+  }
+
+  const sanitizedList = list.map(c => ({
     id: c.id,
     title: c.title || 'Deseos Navideños',
     recipient: c.recipient || '',
@@ -744,69 +603,144 @@ app.get('/api/cards', (req, res) => {
   })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return res.json({
-    total: list.length,
-    cards: list
-  });
-});
-
-// Endpoint: Delete a card
-app.delete('/api/cards/:id', (req, res) => {
-  const cards = readCards();
-  const cardId = req.params.id;
-  if (!cards[cardId]) {
-    return res.status(404).json({ error: 'Tarjeta navideña no encontrada' });
-  }
-
-  delete cards[cardId];
-  saveCards(cards);
-
-  return res.json({
-    success: true,
-    message: `Tarjeta ${cardId} eliminada exitosamente.`
+    total: sanitizedList.length,
+    cards: sanitizedList
   });
 });
 
 // Endpoint: Get Card by ID
 app.get('/api/cards/:id', (req, res) => {
-  const cards = readCards();
-  const card = cards[req.params.id];
-  if (!card) {
-    return res.status(404).json({ error: 'Tarjeta navideña no encontrada' });
-  }
-  return res.json(card);
+  const card = cardStore.get(req.params.id);
+  if (!card) return res.status(404).json({ error: 'Tarjeta navideña no encontrada' });
+
+  const publicCard = { ...card };
+  delete publicCard.adminToken;
+  return res.json(publicCard);
 });
 
-// Route for direct card view: /card/:id
+// Endpoint: Claim / Reserve a gift item
+app.post('/api/cards/:id/items/:itemId/claim', (req, res) => {
+  const card = cardStore.get(req.params.id);
+  if (!card) return res.status(404).json({ error: 'Tarjeta no encontrada' });
+
+  const item = (card.items || []).find(it => String(it.id) === String(req.params.itemId));
+  if (!item) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+  const claimedBy = cleanText(req.body.claimedBy, 60) || 'Alguien con cariño';
+  item.claimed = true;
+  item.claimedBy = claimedBy;
+  item.claimedAt = new Date().toISOString();
+
+  card.updatedAt = new Date().toISOString();
+  cardStore.set(card.id, card);
+
+  return res.json({ success: true, item });
+});
+
+// Endpoint: Unclaim / Release a gift item
+app.post('/api/cards/:id/items/:itemId/unclaim', (req, res) => {
+  const card = cardStore.get(req.params.id);
+  if (!card) return res.status(404).json({ error: 'Tarjeta no encontrada' });
+
+  const item = (card.items || []).find(it => String(it.id) === String(req.params.itemId));
+  if (!item) return res.status(404).json({ error: 'Artículo no encontrado' });
+
+  item.claimed = false;
+  item.claimedBy = '';
+  item.claimedAt = null;
+
+  card.updatedAt = new Date().toISOString();
+  cardStore.set(card.id, card);
+
+  return res.json({ success: true, item });
+});
+
+// Endpoint: Delete a card (requires Admin Token or Local Owner)
+app.delete('/api/cards/:id', (req, res) => {
+  const card = cardStore.get(req.params.id);
+  if (!card) return res.status(404).json({ error: 'Tarjeta navideña no encontrada' });
+
+  const providedToken = req.headers['x-admin-token'] || req.query.token;
+  const isAuthorized = isLocalOwner(req) || (card.adminToken && safeEqual(providedToken, card.adminToken));
+
+  if (!isAuthorized) {
+    return res.status(403).json({ error: 'No autorizado para eliminar esta tarjeta' });
+  }
+
+  cardStore.delete(req.params.id);
+  return res.json({ success: true, message: `Tarjeta ${req.params.id} eliminada exitosamente.` });
+});
+
+// -------------------------------------------------------------
+// Web Route: /card/:id with dynamic Open Graph tags
+// -------------------------------------------------------------
 app.get('/card/:id', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'card.html'));
+  const card = cardStore.get(req.params.id);
+  const cardHtmlPath = path.join(__dirname, 'public', 'card.html');
+
+  if (!fs.existsSync(cardHtmlPath)) {
+    return res.status(404).send('Página no encontrada');
+  }
+
+  let html = fs.readFileSync(cardHtmlPath, 'utf-8');
+
+  if (card) {
+    const cardTitle = `${escapeHtml(card.title || 'Mis Deseos Navideños 🎄')}${card.recipient ? ' - Para: ' + escapeHtml(card.recipient) : ''}`;
+    const cardDesc = card.message
+      ? escapeHtml(card.message)
+      : `Mira la lista de ${card.items ? card.items.length : 0} deseos navideños preparados con cariño.`;
+
+    // Dynamic OpenGraph meta injection
+    html = html.replace(/<title>.*?<\/title>/i, `<title>${cardTitle}</title>`);
+    html = html.replace(/<meta property="og:title" content=".*?">/i, `<meta property="og:title" content="${cardTitle}">`);
+    html = html.replace(/<meta property="og:description" content=".*?">/i, `<meta property="og:description" content="${cardDesc}">`);
+  }
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
-// Endpoint: Download standalone portable HTML card (works anywhere, no server or network needed!)
+// -------------------------------------------------------------
+// Endpoint: Download standalone portable HTML card
+// (Embeds all CSS, scripts, and converts images into Base64 so it works 100% offline)
+// -------------------------------------------------------------
 app.get('/api/download-card/:id', (req, res) => {
-  const cards = readCards();
-  const card = cards[req.params.id];
-  if (!card) {
-    return res.status(404).send('Tarjeta no encontrada');
-  }
+  const card = cardStore.get(req.params.id);
+  if (!card) return res.status(404).send('Tarjeta no encontrada');
 
   try {
     let html = fs.readFileSync(path.join(__dirname, 'public', 'card.html'), 'utf-8');
-    const css = fs.readFileSync(path.join(__dirname, 'public', 'css', 'style.css'), 'utf-8');
+    const tailwindCss = fs.existsSync(path.join(__dirname, 'public', 'css', 'tailwind.css'))
+      ? fs.readFileSync(path.join(__dirname, 'public', 'css', 'tailwind.css'), 'utf-8')
+      : '';
+    const styleCss = fs.readFileSync(path.join(__dirname, 'public', 'css', 'style.css'), 'utf-8');
+    const confettiJs = fs.readFileSync(path.join(__dirname, 'public', 'vendor', 'confetti.browser.js'), 'utf-8');
     const snowJs = fs.readFileSync(path.join(__dirname, 'public', 'js', 'snow.js'), 'utf-8');
     const audioJs = fs.readFileSync(path.join(__dirname, 'public', 'js', 'audio.js'), 'utf-8');
     const cardJs = fs.readFileSync(path.join(__dirname, 'public', 'js', 'card.js'), 'utf-8');
 
-    // Inline CSS
-    html = html.replace('<link rel="stylesheet" href="/css/style.css">', `<style>${css}</style>`);
+    // Create self-contained copy of card with local images converted to data URLs
+    const portableCard = JSON.parse(JSON.stringify(card));
+    delete portableCard.adminToken;
+    portableCard.items = (portableCard.items || []).map(it => ({
+      ...it,
+      image: uploads.localImageToDataUrl(path.join(__dirname, 'public'), it.image)
+    }));
 
-    // Inject embedded card data and inline scripts
+    // Inline CSS
+    html = html.replace('<link rel="stylesheet" href="/css/tailwind.css">', `<style>${tailwindCss}</style>`);
+    html = html.replace('<link rel="stylesheet" href="/css/style.css">', `<style>${styleCss}</style>`);
+
+    // Inlined embedded scripts
     const embeddedPayload = `
-      <script>window.EMBEDDED_CARD_DATA = ${JSON.stringify(card)};</script>
+      <script>window.EMBEDDED_CARD_DATA = ${safeJsonForHtml(portableCard)};</script>
+      <script>${confettiJs}</script>
       <script>${snowJs}</script>
       <script>${audioJs}</script>
       <script>${cardJs}</script>
     `;
 
+    html = html.replace('<script src="/vendor/confetti.browser.js"></script>', '');
     html = html.replace('<script src="/js/snow.js"></script>', '');
     html = html.replace('<script src="/js/audio.js"></script>', '');
     html = html.replace('<script src="/js/card.js"></script>', embeddedPayload);
@@ -820,14 +754,16 @@ app.get('/api/download-card/:id', (req, res) => {
   }
 });
 
-// Start server listening on all network interfaces (0.0.0.0)
-app.listen(PORT, '0.0.0.0', () => {
+// -------------------------------------------------------------
+// Start Server
+// -------------------------------------------------------------
+const serverInstance = app.listen(PORT, '0.0.0.0', () => {
   const ips = getAllValidNetworkIps();
   console.log(`\n==============================================`);
-  console.log(`🎄 SERVIDOR DE TARJETA NAVIDEÑA ACTIVO 🎅`);
-  console.log(`> Local:     http://localhost:${PORT}`);
+  console.log(`🎄 SERVIDOR DE TARJETA NAVIDEÑA SEGURO ACTIVO 🎅`);
+  console.log(`> Local:       http://localhost:${PORT}`);
   if (ips.length > 0) {
-    console.log(`> Móvil Wi-Fi: http://${ips[0].ip}:${PORT} (Recomendado para el QR)`);
+    console.log(`> Móvil Wi-Fi: http://${ips[0].ip}:${PORT} (Misma red)`);
     if (ips.length > 1) {
       console.log(`> Otras redes disponibles:`);
       for (let i = 1; i < ips.length; i++) {
@@ -835,5 +771,8 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     }
   }
+  console.log(`> Diagnóstico: http://localhost:${PORT}/ping`);
   console.log(`==============================================\n`);
 });
+
+module.exports = serverInstance;

@@ -4,10 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tarjeta Navideña de Deseos 🎄✨</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Canvas Confetti -->
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <!-- Open Graph / Redes Sociales / WhatsApp -->
+  <meta property="og:title" content="Tarjeta Navideña de Deseos 🎄">
+  <meta property="og:description" content="Abre esta tarjeta interactiva para ver los regalos y deseos navideños.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/images/default-gift.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- Tailwind CSS Local (sin CDN) -->
+  <link rel="stylesheet" href="/css/tailwind.css">
+  <!-- Canvas Confetti Local -->
+  <script src="/vendor/confetti.browser.js"></script>
   <!-- Custom Festive Styles -->
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="/images/default-gift.svg" type="image/svg+xml">
@@ -88,8 +94,13 @@
           </span>
         </div>
 
-        <!-- Controles de Vista: Horizontal / Vertical y Flechas de Carrusel -->
+        <!-- Controles de Vista: Horizontal / Vertical, Compartir y Flechas de Carrusel -->
         <div class="flex items-center gap-2">
+          <!-- Botón Compartir -->
+          <button id="shareCardBtn" type="button" class="bg-emerald-700/80 hover:bg-emerald-600 text-white font-medium text-xs px-3 py-1.5 rounded-xl border border-emerald-400/40 shadow flex items-center gap-1.5 transition-all" title="Compartir tarjeta">
+            <span>📤</span> <span class="hidden sm:inline">Compartir</span>
+          </button>
+
           <!-- Botones de modo -->
           <div class="inline-flex bg-black/40 border border-white/20 rounded-xl p-1 text-xs">
             <button id="layoutVerticalBtn" type="button" class="px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 text-slate-300 hover:text-white" title="Vista en lista vertical">
@@ -138,6 +149,24 @@
     </div>
 
   </main>
+
+  <!-- Modal para Reservar Regalo -->
+  <div id="claimModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+    <div class="relative w-full max-w-sm bg-stone-900 border-2 border-emerald-400 rounded-3xl p-6 text-center shadow-2xl">
+      <button id="closeClaimModalBtn" type="button" class="absolute top-3 right-3 text-slate-400 hover:text-white text-lg w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/10">✕</button>
+      <div class="text-4xl mb-2">🎁</div>
+      <h3 class="text-lg font-bold text-white mb-1">¡Apartar este deseo navideño!</h3>
+      <p id="claimItemTitle" class="text-xs text-amber-200 mb-4 font-semibold truncate"></p>
+      <div class="mb-5 text-left">
+        <label class="block text-[11px] text-slate-300 font-medium mb-1">Tu nombre o apodo (opcional):</label>
+        <input type="text" id="claimNameInput" placeholder="Ej. Tía Carmen, Hermano..." class="w-full bg-black/50 border border-white/20 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-400 focus:outline-none">
+        <p class="text-[10px] text-slate-400 mt-1">Así la persona sabrá quién le cumplirá este deseo.</p>
+      </div>
+      <button id="confirmClaimBtn" type="button" class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs shadow-lg transition-all flex items-center justify-center gap-2">
+        <span>✓</span> Confirmar Elección
+      </button>
+    </div>
+  </div>
 
   <!-- Modal para Visualizar Imagen en Grande (Lightbox) -->
   <div id="imageLightboxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md cursor-pointer">

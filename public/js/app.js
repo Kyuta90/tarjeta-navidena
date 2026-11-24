@@ -49,6 +49,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyCustomUrlBtn = document.getElementById('applyCustomUrlBtn');
   const downloadStandaloneBtn = document.getElementById('downloadStandaloneBtn');
 
+  // Priority, Price & Tunnel Elements
+  const previewPrioritySelect = document.getElementById('previewPrioritySelect');
+  const previewPriceInput = document.getElementById('previewPriceInput');
+  const tunnelHeaderToggleBtn = document.getElementById('tunnelHeaderToggleBtn');
+  const tunnelHeaderStatusText = document.getElementById('tunnelHeaderStatusText');
+  const toggleTunnelBtn = document.getElementById('toggleTunnelBtn');
+  const toggleTunnelBtnText = document.getElementById('toggleTunnelBtnText');
+  const tunnelStatusDot = document.getElementById('tunnelStatusDot');
+  const tunnelStatusTitle = document.getElementById('tunnelStatusTitle');
+  const tunnelStatusDesc = document.getElementById('tunnelStatusDesc');
+  const qrNetworkAlert = document.getElementById('qrNetworkAlert');
+  const alertActiveIpText = document.getElementById('alertActiveIpText');
+
   // Mobile Simulator elements
   const openMobileSimulatorBtn = document.getElementById('openMobileSimulatorBtn');
   const mobileSimulatorModal = document.getElementById('mobileSimulatorModal');
@@ -56,15 +69,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeMobileSimulatorBtn = document.getElementById('closeMobileSimulatorBtn');
 
   let currentCardId = null;
+  let activeTunnelUrl = null;
 
-  // Load physical network IPs so the user can easily select Wi-Fi / LAN
+  // Load physical network IPs so the user can easily select Wi-Fi / LAN / Tunnel
   async function loadNetworkIps() {
     try {
       const res = await fetch('/api/network-ips');
       const data = await res.json();
       const candidates = data.candidates || [];
-      if (modalIpSelector && candidates.length > 0) {
+      const currentSelected = modalIpSelector ? modalIpSelector.value : '';
+
+      if (modalIpSelector) {
         modalIpSelector.innerHTML = '';
+
+        // If tunnel is active, place it as the FIRST recommended choice
+        if (data.tunnel && data.tunnel.status === 'running' && data.tunnel.url) {
+          activeTunnelUrl = data.tunnel.url;
+          const tunnelOpt = document.createElement('option');
+          tunnelOpt.value = data.tunnel.url;
+          tunnelOpt.textContent = `🌐 ${data.tunnel.url} - Túnel Universal 4G (Recomendado)`;
+          modalIpSelector.appendChild(tunnelOpt);
+        } else {
+          activeTunnelUrl = null;
+        }
+
         candidates.forEach(cand => {
           const opt = document.createElement('option');
           opt.value = cand.ip;
@@ -83,18 +111,112 @@ document.addEventListener('DOMContentLoaded', () => {
         customOpt.value = 'custom';
         customOpt.textContent = '🌐 Ingresar URL pública personalizada (ngrok / túnel)...';
         modalIpSelector.appendChild(customOpt);
+
+        if (currentSelected && modalIpSelector.querySelector(`option[value="${currentSelected}"]`)) {
+          modalIpSelector.value = currentSelected;
+        } else if (activeTunnelUrl) {
+          modalIpSelector.value = activeTunnelUrl;
+        }
       }
     } catch (err) {
       console.warn('No se pudieron cargar las IPs de red:', err);
     }
   }
-  loadNetworkIps();
+
+  function updateQrNetworkAlert() {
+    if (!qrNetworkAlert) return;
+    const selected = modalIpSelector ? modalIpSelector.value : '';
+    if (selected && selected.startsWith('http') && selected.includes('trycloudflare.com')) {
+      qrNetworkAlert.className = 'text-[11px] p-2.5 rounded-xl border border-emerald-500/50 bg-emerald-950/60 text-emerald-200';
+      qrNetworkAlert.innerHTML = `<span>✅ <strong>Túnel Universal Activo:</strong> Este QR se puede escanear desde <strong>cualquier celular y cualquier red (4G, 5G o Wi-Fi)</strong> en cualquier lugar del mundo.</span>`;
+    } else if (selected === 'localhost') {
+      qrNetworkAlert.className = 'text-[11px] p-2.5 rounded-xl border border-red-500/50 bg-red-950/60 text-red-200';
+      qrNetworkAlert.innerHTML = `<span>⚠️ <strong>Aviso:</strong> "localhost" solo funciona en este computador. Los celulares no podrán abrir la tarjeta con esta dirección.</span>`;
+    } else {
+      qrNetworkAlert.className = 'text-[11px] p-2.5 rounded-xl border border-amber-400/40 bg-amber-950/40 text-amber-200';
+      qrNetworkAlert.innerHTML = `<span>⚠️ <strong>Aviso de red Wi-Fi:</strong> Este QR apunta a tu red local (<span class="font-mono font-bold">${selected || 'Wi-Fi'}</span>). Tu celular <strong>debe estar en la misma red Wi-Fi</strong> para que cargue. Para que funcione en cualquier lugar (4G), activa el <em>Túnel Universal</em> arriba.</span>`;
+    }
+  }
+
+  async function syncTunnelUI() {
+    try {
+      const res = await fetch('/api/tunnel/status');
+      const data = await res.json();
+      const isRunning = data.status === 'running' && data.url;
+      activeTunnelUrl = isRunning ? data.url : null;
+
+      if (isRunning) {
+        if (tunnelHeaderStatusText) tunnelHeaderStatusText.textContent = 'Túnel 4G: Activo ✓';
+        if (tunnelHeaderToggleBtn) {
+          tunnelHeaderToggleBtn.classList.replace('bg-emerald-600/30', 'bg-emerald-500');
+          tunnelHeaderToggleBtn.classList.replace('text-emerald-300', 'text-stone-950');
+        }
+        if (toggleTunnelBtnText) toggleTunnelBtnText.textContent = 'Desactivar Túnel';
+        if (toggleTunnelBtn) toggleTunnelBtn.classList.replace('bg-emerald-600', 'bg-stone-700');
+        if (tunnelStatusDot) tunnelStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block animate-pulse';
+        if (tunnelStatusTitle) tunnelStatusTitle.textContent = '🌐 Túnel Universal 4G Activo';
+        if (tunnelStatusDesc) tunnelStatusDesc.innerHTML = `<span class="text-emerald-300 font-mono font-bold">${data.url}</span> — ¡Cualquier celular puede escanear tu QR desde cualquier lugar!`;
+      } else {
+        if (tunnelHeaderStatusText) tunnelHeaderStatusText.textContent = 'Activar Túnel 4G';
+        if (tunnelHeaderToggleBtn) {
+          tunnelHeaderToggleBtn.classList.replace('bg-emerald-500', 'bg-emerald-600/30');
+          tunnelHeaderToggleBtn.classList.replace('text-stone-950', 'text-emerald-300');
+        }
+        if (toggleTunnelBtnText) toggleTunnelBtnText.textContent = 'Activar Túnel';
+        if (toggleTunnelBtn) toggleTunnelBtn.classList.replace('bg-stone-700', 'bg-emerald-600');
+        if (tunnelStatusDot) tunnelStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500 inline-block';
+        if (tunnelStatusTitle) tunnelStatusTitle.textContent = 'Túnel Universal 4G (Recomendado)';
+        if (tunnelStatusDesc) tunnelStatusDesc.textContent = 'Genera una URL segura accesible desde cualquier celular y red móvil sin configurar tu router.';
+      }
+
+      await loadNetworkIps();
+      updateQrNetworkAlert();
+    } catch (e) {
+      console.warn('Error sincronizando túnel:', e);
+    }
+  }
+
+  async function toggleTunnel() {
+    try {
+      const isRunning = Boolean(activeTunnelUrl);
+      const endpoint = isRunning ? '/api/tunnel/stop' : '/api/tunnel/start';
+
+      if (toggleTunnelBtn) toggleTunnelBtn.disabled = true;
+      if (toggleTunnelBtnText) toggleTunnelBtnText.textContent = isRunning ? 'Deteniendo...' : 'Activando túnel...';
+
+      const res = await fetch(endpoint, { method: 'POST' });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      await syncTunnelUI();
+
+      if (currentCardId) {
+        if (!isRunning && data.url) {
+          modalIpSelector.value = data.url;
+          await updateQrWithIp(data.url);
+        } else {
+          const selectedVal = modalIpSelector ? modalIpSelector.value : null;
+          await updateQrWithIp(selectedVal);
+        }
+      }
+    } catch (err) {
+      alert('Error con el túnel: ' + err.message);
+    } finally {
+      if (toggleTunnelBtn) toggleTunnelBtn.disabled = false;
+    }
+  }
+
+  if (toggleTunnelBtn) toggleTunnelBtn.addEventListener('click', toggleTunnel);
+  if (tunnelHeaderToggleBtn) tunnelHeaderToggleBtn.addEventListener('click', toggleTunnel);
+
+  syncTunnelUI();
 
   // Listen to IP changes in QR Modal to regenerate QR on the fly
   if (modalIpSelector) {
     modalIpSelector.addEventListener('change', async () => {
       if (!currentCardId) return;
       const selectedVal = modalIpSelector.value;
+      updateQrNetworkAlert();
 
       if (selectedVal === 'custom') {
         if (customUrlContainer) customUrlContainer.classList.remove('hidden');
@@ -159,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function applyQrData(qrDataUrl, targetUrl) {
     modalQrImage.src = qrDataUrl;
     modalShareUrlInput.value = targetUrl;
+    updateQrNetworkAlert();
     downloadQrBtn.onclick = () => {
       const a = document.createElement('a');
       a.href = qrDataUrl;
@@ -528,6 +651,9 @@ document.addEventListener('DOMContentLoaded', () => {
   addItemToListBtn.addEventListener('click', () => {
     if (!currentPreview) return;
 
+    const priority = (previewPrioritySelect && previewPrioritySelect.value) ? previewPrioritySelect.value : 'normal';
+    const price = (previewPriceInput && previewPriceInput.value) ? previewPriceInput.value.trim() : '';
+
     // Use edited values if modified
     const itemToAdd = {
       id: 'item-' + Date.now(),
@@ -536,11 +662,16 @@ document.addEventListener('DOMContentLoaded', () => {
       title: previewTitleInput.value.trim() || currentPreview.title || `Deseo #${items.length + 1}`,
       image: previewImageUrlInput.value.trim() || currentPreview.image || '/images/default-gift.svg',
       siteName: currentPreview.siteName,
-      description: currentPreview.description
+      description: currentPreview.description,
+      priority,
+      price
     };
 
     items.push(itemToAdd);
     renderItemsList();
+
+    if (previewPriceInput) previewPriceInput.value = '';
+    if (previewPrioritySelect) previewPrioritySelect.value = 'normal';
 
     // Trigger celebration confetti
     if (window.confetti) {
@@ -601,6 +732,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="text-[11px] text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
               ${escapeHtml(item.siteName || 'Enlace')}
             </span>
+            ${item.priority === 'alta' ? '<span class="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/40">⭐ Muy Querido</span>' : ''}
+            ${item.price ? `<span class="text-[10px] font-medium text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">🏷️ ${escapeHtml(item.price)}</span>` : ''}
             <a href="${item.url}" target="_blank" class="text-[11px] text-blue-300 hover:underline truncate max-w-[140px] sm:max-w-[180px]">
               Ver link original ↗
             </a>
@@ -716,6 +849,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Success! Show QR Modal
       currentCardId = data.id;
+
+      // Save adminToken for management
+      if (data.adminToken) {
+        const tokens = JSON.parse(localStorage.getItem('navidad_admin_tokens') || '{}');
+        tokens[data.id] = data.adminToken;
+        localStorage.setItem('navidad_admin_tokens', JSON.stringify(tokens));
+      }
+
       const targetUrl = data.qrTargetUrl || data.lanUrl || data.localUrl;
       modalQrImage.src = data.qrCodeDataUrl;
       modalShareUrlInput.value = targetUrl;
@@ -919,7 +1060,17 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!confirmDel) return;
 
           try {
-            await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
+            const tokens = JSON.parse(localStorage.getItem('navidad_admin_tokens') || '{}');
+            const token = tokens[card.id] || '';
+
+            const delRes = await fetch(`/api/cards/${card.id}`, {
+              method: 'DELETE',
+              headers: { 'X-Admin-Token': token }
+            });
+            if (!delRes.ok) {
+              const errData = await delRes.json().catch(() => ({}));
+              throw new Error(errData.error || 'No se pudo eliminar');
+            }
             
             // Remove from local storage
             const updatedLocal = allCards.filter(c => c.id !== card.id);
