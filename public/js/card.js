@@ -254,10 +254,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         <!-- Botones de Acción (Enlace y Elegir Regalo) -->
         <div class="pt-3 border-t border-white/10 flex flex-col gap-2">
-          <!-- Botón de Enlace al Artículo -->
+          <!-- Botón de Enlace al Artículo o Foto -->
+          ${(item.url && item.url !== '#' && /^https?:\/\//i.test(item.url)) ? `
           <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2">
             <span>🔗</span> Ver artículo en la tienda
           </a>
+          ` : `
+          <button type="button" class="view-item-photo-btn w-full bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-400/30 font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2">
+            <span>📸</span> Ver foto del deseo
+          </button>
+          `}
 
           <!-- Botón Interactivo: "¡Yo te regalo este!" -->
           <button type="button" class="claim-gift-btn w-full bg-white/10 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 font-semibold py-2 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5">
@@ -266,13 +272,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `;
 
-      // Lightbox click on image
+      // Lightbox click on image or photo button
       const imgTrigger = itemCard.querySelector('.image-preview-trigger');
-      imgTrigger.addEventListener('click', () => {
+      const photoBtn = itemCard.querySelector('.view-item-photo-btn');
+      const openLightbox = () => {
         lightboxImg.src = item.image;
         lightboxCaption.textContent = `#${orderNum} - ${item.title}`;
         imageLightboxModal.classList.remove('hidden');
-      });
+      };
+      if (imgTrigger) imgTrigger.addEventListener('click', openLightbox);
+      if (photoBtn) photoBtn.addEventListener('click', openLightbox);
 
       // Claim Gift button celebration
       const claimBtn = itemCard.querySelector('.claim-gift-btn');

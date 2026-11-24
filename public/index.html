@@ -42,6 +42,9 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <a href="#registrySection" class="text-xs bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
+          <span>📚</span> <span class="hidden sm:inline">Registro de Tarjetas</span> (<span id="headerCardCount">0</span>)
+        </a>
         <button id="sampleItemsBtn" class="text-xs bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
           <span>✨</span> Cargar Ejemplos
         </button>
@@ -142,10 +145,18 @@
                 📋 Pegar
               </button>
             </div>
-            <button id="fetchPreviewBtn" type="button" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-900 font-bold px-5 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm whitespace-nowrap">
-              <span>🔍</span> Detectar
-            </button>
+            <div class="flex gap-2">
+              <button id="fetchPreviewBtn" type="button" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-900 font-bold px-4 py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-1.5 text-sm whitespace-nowrap">
+                <span>🔍</span> Detectar
+              </button>
+              <button id="directUploadBtn" type="button" class="bg-white/10 hover:bg-white/20 text-amber-300 border border-amber-400/40 font-semibold px-3 py-3 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 text-xs whitespace-nowrap" title="Subir una foto directamente desde tu dispositivo">
+                <span>📁</span> Subir Foto
+              </button>
+            </div>
           </div>
+
+          <!-- Input oculto para subir archivos de imagen -->
+          <input type="file" id="imageFileInput" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden">
 
           <!-- Spinner / Estado de Carga -->
           <div id="previewLoading" class="hidden my-4 p-4 rounded-xl bg-black/40 border border-amber-400/30 text-center animate-pulse">
@@ -156,19 +167,32 @@
 
           <!-- Tarjeta de Previsualización de la Imagen Referencial del Artículo -->
           <div id="previewCard" class="hidden mt-4 p-4 rounded-xl bg-stone-900/90 border-2 border-amber-400/60 shadow-xl transition-all">
+            
+            <!-- Aviso si la imagen no carga o la tienda la bloquea -->
+            <div id="imageMissingAlert" class="hidden mb-3 p-3 rounded-xl bg-amber-950/80 border border-amber-400/50 text-xs text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">⚠️</span>
+                <span>La imagen no cargó o la tienda bloqueó su vista previa. <strong>Puedes subir una foto desde tu dispositivo</strong>.</span>
+              </div>
+              <button type="button" id="alertUploadBtn" class="bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap shadow">
+                📁 Subir Foto Ahora
+              </button>
+            </div>
+
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
-                <span>📸</span> Imagen referencial detectada:
+                <span>📸</span> Imagen referencial del artículo:
               </span>
               <span id="previewSiteName" class="text-xs bg-white/10 text-slate-200 px-2 py-0.5 rounded-md border border-white/10"></span>
             </div>
 
             <div class="flex flex-col sm:flex-row gap-4 items-center">
-              <!-- Contenedor de la Imagen Referencial -->
-              <div class="relative w-full sm:w-36 h-36 flex-shrink-0 bg-black/40 rounded-lg overflow-hidden border border-white/20 flex items-center justify-center">
+              <!-- Contenedor de la Imagen Referencial con soporte drag & drop -->
+              <div id="previewImgDropZone" class="relative w-full sm:w-36 h-36 flex-shrink-0 bg-black/40 rounded-xl overflow-hidden border-2 border-dashed border-white/20 hover:border-amber-400 flex flex-col items-center justify-center group cursor-pointer transition-colors" title="Haz clic o arrastra para cambiar la foto">
                 <img id="previewImg" src="/images/default-gift.svg" alt="Imagen referencial del artículo" class="w-full h-full object-contain p-1 rounded-lg">
-                <div class="absolute bottom-1 right-1 bg-black/70 text-[10px] text-amber-300 px-1.5 py-0.5 rounded">
-                  Vista Previa
+                <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center">
+                  <span class="text-xl mb-1">📁</span>
+                  <span class="text-[10px] text-amber-300 font-bold leading-tight">Cambiar foto</span>
                 </div>
               </div>
 
@@ -179,8 +203,13 @@
                   <input type="text" id="previewTitleInput" class="w-full bg-black/40 border border-white/20 rounded-lg px-2.5 py-1.5 text-sm text-white focus:border-amber-300 focus:outline-none">
                 </div>
                 <div>
-                  <label class="block text-[11px] uppercase font-semibold text-slate-300">URL de la Imagen Referencial (editable si deseas otra):</label>
-                  <input type="text" id="previewImageUrlInput" class="w-full bg-black/40 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 focus:border-amber-300 focus:outline-none">
+                  <div class="flex items-center justify-between">
+                    <label class="block text-[11px] uppercase font-semibold text-slate-300">URL o Foto del Artículo:</label>
+                    <button type="button" id="changeImageBtn" class="text-[11px] text-amber-400 hover:text-amber-300 underline flex items-center gap-1">
+                      <span>📁</span> Subir archivo local
+                    </button>
+                  </div>
+                  <input type="text" id="previewImageUrlInput" class="w-full bg-black/40 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-amber-200 focus:border-amber-300 focus:outline-none" placeholder="https://... o sube una imagen">
                 </div>
                 <div class="text-[11px] text-slate-400 truncate">
                   <span class="text-slate-300">Enlace original:</span> <a id="previewOriginalUrl" href="#" target="_blank" class="text-blue-300 hover:underline"></a>
@@ -252,6 +281,34 @@
       </div>
 
     </div>
+
+    <!-- 3. Registro e Historial de Tarjetas Generadas -->
+    <section id="registrySection" class="mt-12 festive-glass rounded-3xl p-6 sm:p-8 border border-white/20 shadow-2xl">
+      <div class="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4 mb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📚</span>
+            <h3 class="text-xl sm:text-2xl font-bold text-amber-300">
+              Registro de Tarjetas Generadas
+            </h3>
+            <span id="registryCountBadge" class="bg-amber-400 text-stone-900 text-xs font-bold px-2.5 py-0.5 rounded-full shadow">
+              0 guardadas
+            </span>
+          </div>
+          <p class="text-xs text-red-200 mt-1">
+            Tus tarjetas se conservan permanentemente y no caducan. Puedes verlas, escanear su QR o eliminarlas cuando decidas.
+          </p>
+        </div>
+        <button id="refreshRegistryBtn" type="button" class="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm">
+          <span>🔄</span> Actualizar Registro
+        </button>
+      </div>
+
+      <!-- Contenedor del listado de tarjetas -->
+      <div id="registryListContainer" class="space-y-3">
+        <!-- Rellenado dinámicamente con las tarjetas creadas -->
+      </div>
+    </section>
 
   </main>
 

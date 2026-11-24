@@ -16,6 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const cancelPreviewBtn = document.getElementById('cancelPreviewBtn');
   const addItemToListBtn = document.getElementById('addItemToListBtn');
 
+  // Image Upload elements
+  const imageFileInput = document.getElementById('imageFileInput');
+  const directUploadBtn = document.getElementById('directUploadBtn');
+  const imageMissingAlert = document.getElementById('imageMissingAlert');
+  const alertUploadBtn = document.getElementById('alertUploadBtn');
+  const previewImgDropZone = document.getElementById('previewImgDropZone');
+  const changeImageBtn = document.getElementById('changeImageBtn');
+
   const itemsListContainer = document.getElementById('itemsListContainer');
   const emptyListState = document.getElementById('emptyListState');
   const itemsCounterBadge = document.getElementById('itemsCounterBadge');
@@ -286,11 +294,141 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchLinkPreview(val);
   });
 
+  // -------------------------------------------------------------
+  // Image Upload, Drag & Drop, and Compression (Base64)
+  // -------------------------------------------------------------
+  function openImageFileDialog() {
+    if (imageFileInput) {
+      imageFileInput.value = '';
+      imageFileInput.click();
+    }
+  }
+
+  if (directUploadBtn) directUploadBtn.addEventListener('click', openImageFileDialog);
+  if (alertUploadBtn) alertUploadBtn.addEventListener('click', openImageFileDialog);
+  if (changeImageBtn) changeImageBtn.addEventListener('click', openImageFileDialog);
+
+  if (previewImgDropZone) {
+    previewImgDropZone.addEventListener('click', () => {
+      openImageFileDialog();
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      previewImgDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewImgDropZone.classList.add('border-amber-400', 'bg-amber-950/40');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      previewImgDropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        previewImgDropZone.classList.remove('border-amber-400', 'bg-amber-950/40');
+      });
+    });
+
+    previewImgDropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processUploadedImageFile(files[0]);
+      }
+    });
+  }
+
+  if (imageFileInput) {
+    imageFileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        processUploadedImageFile(files[0]);
+      }
+    });
+  }
+
+  function processUploadedImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido (PNG, JPG, WEBP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const img = new Image();
+      img.onload = () => {
+        // Redimensionar a un tamaño óptimo (máx 800px) para mantener calidad nítida sin sobrecargar memoria
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        applyUploadedImage(dataUrl, file.name);
+      };
+      img.onerror = () => {
+        alert('No se pudo procesar la imagen seleccionada.');
+      };
+      img.src = readerEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function applyUploadedImage(imageDataUrl, fileName) {
+    const rawName = fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Foto de Regalo';
+    const cleanTitle = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+
+    if (!currentPreview) {
+      currentPreview = {
+        url: linkInput.value.trim() || '#',
+        title: cleanTitle,
+        image: imageDataUrl,
+        siteName: 'Foto Subida',
+        description: 'Imagen subida desde dispositivo'
+      };
+      previewTitleInput.value = currentPreview.title;
+      previewOriginalUrl.textContent = currentPreview.url !== '#' ? currentPreview.url : 'Archivo local subido';
+      previewOriginalUrl.href = currentPreview.url;
+      previewSiteName.textContent = 'Foto Subida 📁';
+    } else {
+      currentPreview.image = imageDataUrl;
+      if (!previewTitleInput.value.trim()) {
+        previewTitleInput.value = cleanTitle;
+        currentPreview.title = cleanTitle;
+      }
+    }
+
+    previewImg.src = imageDataUrl;
+    previewImageUrlInput.value = imageDataUrl;
+
+    if (imageMissingAlert) {
+      imageMissingAlert.classList.add('hidden');
+    }
+
+    previewLoading.classList.add('hidden');
+    previewCard.classList.remove('hidden');
+  }
+
   // Fetch link preview from server
   async function fetchLinkPreview(url) {
     if (!url) return;
 
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     previewLoading.classList.remove('hidden');
 
     try {
@@ -313,7 +451,20 @@ document.addEventListener('DOMContentLoaded', () => {
       previewImg.src = currentPreview.image;
       previewImg.onerror = () => {
         previewImg.src = '/images/default-gift.svg';
+        if (imageMissingAlert) imageMissingAlert.classList.remove('hidden');
       };
+      previewImg.onload = () => {
+        if (!previewImg.src.includes('default-gift.svg') && imageMissingAlert) {
+          imageMissingAlert.classList.add('hidden');
+        }
+      };
+
+      if (!data.image || data.image.includes('default-gift.svg')) {
+        if (imageMissingAlert) imageMissingAlert.classList.remove('hidden');
+      } else {
+        if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
+      }
+
       previewTitleInput.value = currentPreview.title;
       previewImageUrlInput.value = currentPreview.image;
       previewOriginalUrl.textContent = currentPreview.url;
@@ -357,6 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
       previewOriginalUrl.href = url;
       previewSiteName.textContent = 'Enlace web';
 
+      if (imageMissingAlert) {
+        imageMissingAlert.classList.remove('hidden');
+      }
+
       previewCard.classList.remove('hidden');
     }
   }
@@ -364,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cancel preview
   cancelPreviewBtn.addEventListener('click', () => {
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     currentPreview = null;
     linkInput.value = '';
   });
@@ -397,6 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset preview
     previewCard.classList.add('hidden');
+    if (imageMissingAlert) imageMissingAlert.classList.add('hidden');
     currentPreview = null;
     linkInput.value = '';
     linkInput.focus();
@@ -577,6 +734,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch {}
       }
 
+      // Refresh cards registry
+      loadCardsRegistry();
+
       // Set download QR button
       downloadQrBtn.onclick = () => {
         const a = document.createElement('a');
@@ -639,5 +799,174 @@ document.addEventListener('DOMContentLoaded', () => {
       copyShareUrlBtn.textContent = '¡Copiado! ✓';
     }
   });
+
+  // -------------------------------------------------------------
+  // Registro e Historial de Tarjetas Generadas
+  // -------------------------------------------------------------
+  const registryListContainer = document.getElementById('registryListContainer');
+  const registryCountBadge = document.getElementById('registryCountBadge');
+  const headerCardCount = document.getElementById('headerCardCount');
+  const refreshRegistryBtn = document.getElementById('refreshRegistryBtn');
+
+  async function loadCardsRegistry() {
+    if (!registryListContainer) return;
+
+    try {
+      const res = await fetch('/api/cards');
+      const data = await res.json();
+      const serverCards = data.cards || [];
+
+      // Combine with localStorage to ensure maximum persistence
+      const localStored = JSON.parse(localStorage.getItem('navidad_cards_history') || '[]');
+      const cardMap = new Map();
+
+      // Put server cards in map
+      serverCards.forEach(c => cardMap.set(c.id, c));
+      // Put local cards in map if not present
+      localStored.forEach(c => {
+        if (!cardMap.has(c.id)) {
+          cardMap.set(c.id, c);
+        }
+      });
+
+      const allCards = Array.from(cardMap.values()).sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      // Update badge counts
+      const countStr = `${allCards.length} ${allCards.length === 1 ? 'guardada' : 'guardadas'}`;
+      if (registryCountBadge) registryCountBadge.textContent = countStr;
+      if (headerCardCount) headerCardCount.textContent = allCards.length;
+
+      // Update local storage backup
+      localStorage.setItem('navidad_cards_history', JSON.stringify(allCards));
+
+      if (allCards.length === 0) {
+        registryListContainer.innerHTML = `
+          <div class="text-center py-10 px-4 border-2 border-dashed border-white/20 rounded-2xl">
+            <span class="text-3xl block mb-2 opacity-70">📜</span>
+            <p class="text-sm font-semibold text-slate-200">No hay tarjetas registradas todavía</p>
+            <p class="text-xs text-slate-400 mt-1">Crea tu primera tarjeta arriba y quedará guardada aquí para siempre.</p>
+          </div>
+        `;
+        return;
+      }
+
+      registryListContainer.innerHTML = '';
+
+      allCards.forEach(card => {
+        const itemElem = document.createElement('div');
+        itemElem.className = 'bg-stone-900/90 border border-white/20 hover:border-amber-400/60 rounded-2xl p-4 shadow-lg transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4';
+
+        // Format date
+        const dateObj = new Date(card.createdAt);
+        const dateFormatted = !isNaN(dateObj) 
+          ? dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : 'Fecha desconocida';
+
+        itemElem.innerHTML = `
+          <!-- Info de la Tarjeta -->
+          <div class="flex-grow min-w-0">
+            <div class="flex flex-wrap items-center gap-2 mb-1">
+              <span class="text-xs font-mono font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                ${escapeHtml(card.id)}
+              </span>
+              <span class="text-xs text-slate-400">
+                📅 ${dateFormatted}
+              </span>
+              <span class="text-xs bg-red-900/60 text-red-200 px-2 py-0.5 rounded-full border border-red-500/30">
+                🎁 ${card.itemCount || 0} ${(card.itemCount === 1 ? 'deseo' : 'deseos')}
+              </span>
+            </div>
+
+            <h4 class="text-base font-bold text-white truncate">
+              ${escapeHtml(card.title || 'Mis Deseos Navideños')}
+            </h4>
+
+            <div class="text-xs text-slate-300 mt-0.5 flex flex-wrap gap-x-4">
+              ${card.recipient ? `<span><strong>Para:</strong> ${escapeHtml(card.recipient)}</span>` : ''}
+              ${card.sender ? `<span><strong>De:</strong> ${escapeHtml(card.sender)}</span>` : ''}
+              <span class="text-emerald-400 font-medium">● Activa (sin caducidad)</span>
+            </div>
+          </div>
+
+          <!-- Acciones: Ver, Ver QR, Eliminar -->
+          <div class="flex-shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10">
+            <a href="/card/${card.id}" target="_blank" class="bg-white/10 hover:bg-white/25 text-white font-medium text-xs px-3 py-2 rounded-xl border border-white/20 transition-all flex items-center gap-1.5 shadow-sm" title="Ver la tarjeta navideña">
+              <span>👁️</span> <span class="hidden md:inline">Ver</span> Tarjeta
+            </a>
+
+            <button type="button" class="view-qr-btn bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm" title="Ver y descargar código QR">
+              <span>📱</span> <span class="hidden md:inline">Ver</span> QR
+            </button>
+
+            <button type="button" class="delete-card-btn bg-red-950/80 hover:bg-red-800 text-red-300 hover:text-white border border-red-600/40 text-xs px-2.5 py-2 rounded-xl transition-all flex items-center gap-1" title="Eliminar tarjeta">
+              <span>🗑️</span>
+            </button>
+          </div>
+        `;
+
+        // Event listener: View QR
+        const viewQrBtn = itemElem.querySelector('.view-qr-btn');
+        viewQrBtn.addEventListener('click', async () => {
+          await openQrModalForCard(card.id);
+        });
+
+        // Event listener: Delete Card
+        const deleteCardBtn = itemElem.querySelector('.delete-card-btn');
+        deleteCardBtn.addEventListener('click', async () => {
+          const confirmDel = confirm(`¿Estás seguro de que deseas eliminar permanentemente la tarjeta "${card.title || card.id}"? Esta acción no se puede deshacer.`);
+          if (!confirmDel) return;
+
+          try {
+            await fetch(`/api/cards/${card.id}`, { method: 'DELETE' });
+            
+            // Remove from local storage
+            const updatedLocal = allCards.filter(c => c.id !== card.id);
+            localStorage.setItem('navidad_cards_history', JSON.stringify(updatedLocal));
+
+            loadCardsRegistry();
+          } catch (err) {
+            console.error(err);
+            alert('Error al eliminar la tarjeta: ' + err.message);
+          }
+        });
+
+        registryListContainer.appendChild(itemElem);
+      });
+
+    } catch (err) {
+      console.error('Error cargando registro de tarjetas:', err);
+    }
+  }
+
+  async function openQrModalForCard(cardId) {
+    try {
+      const res = await fetch(`/api/cards/${cardId}`);
+      if (!res.ok) throw new Error('Tarjeta no encontrada');
+      const data = await res.json();
+
+      currentCardId = cardId;
+      openCardDirectBtn.href = `/card/${cardId}`;
+      if (downloadStandaloneBtn) {
+        downloadStandaloneBtn.href = `/api/download-card/${cardId}`;
+      }
+
+      // Generate or update QR
+      const selectedIp = modalIpSelector ? modalIpSelector.value : null;
+      await updateQrWithIp(selectedIp);
+
+      qrModal.classList.remove('hidden');
+    } catch (err) {
+      alert('No se pudo abrir el QR: ' + err.message);
+    }
+  }
+
+  if (refreshRegistryBtn) {
+    refreshRegistryBtn.addEventListener('click', loadCardsRegistry);
+  }
+
+  // Load registry on startup
+  loadCardsRegistry();
 
 });
