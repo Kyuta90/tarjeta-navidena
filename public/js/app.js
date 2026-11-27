@@ -1117,6 +1117,27 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshRegistryBtn.addEventListener('click', loadCardsRegistry);
   }
 
+  const btnBackupDrive = document.getElementById('btnBackupDrive');
+  if (btnBackupDrive) {
+    btnBackupDrive.addEventListener('click', async () => {
+      try {
+        const driveRes = await fetch('/api/drive/status').then(r => r.json());
+        const confirmDownload = confirm(
+          `📁 Sincronización con Google Drive / Respaldo en la Nube\n\n` +
+          `• Estado: ${driveRes.provider}\n` +
+          `• Enlaces de Google Drive: Soportados directamente (al pegar enlaces de fotos o archivos de Drive en la lista de deseos, se extraen automáticamente).\n` +
+          `• Protección Render: Monitoreo activo en /healthz y /ping con auto-keepalive.\n\n` +
+          `¿Deseas descargar el archivo de respaldo .JSON de todas tus tarjetas para guardarlo en tu Google Drive?`
+        );
+        if (confirmDownload) {
+          window.location.href = '/api/backup/download';
+        }
+      } catch (err) {
+        window.location.href = '/api/backup/download';
+      }
+    });
+  }
+
   // Load registry on startup
   loadCardsRegistry();
 

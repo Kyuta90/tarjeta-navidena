@@ -1,7 +1,7 @@
 {
-  "navidad-1aefd2f9": {
-    "id": "navidad-1aefd2f9",
-    "adminToken": "hu0zbnu3xVPhElrfvrGbERdO",
+  "navidad-562bf5c2": {
+    "id": "navidad-562bf5c2",
+    "adminToken": "a-MBPlSl1GeBNzoOw6GcOSj8",
     "title": "Mis Deseos Navideños 🎄",
     "recipient": "Amigo Secreto",
     "sender": "",
@@ -9,10 +9,10 @@
     "theme": "classic-red",
     "items": [
       {
-        "id": "item-1795528221126",
+        "id": "item-1795625227235",
         "order": 1,
-        "url": "https://articulo.mercadolibre.cl/MLC-1402593487-filamento-pla-ender-1kg-175mm-colores-_JM?attributes=COLOR_SECONDARY_COLOR%3AQmxhbmNv&picker=true&searchVariation=178216748690&quantity=1",
-        "title": "Filamento Pla Ender 1kg 175mm Colores",
+        "url": "https://articulo.mercadolibre.cl/MLC-1402593487-filamento-pla-ender-1kg-175mm-colores-_JM?searchVariation=179026055877&attributes=COLOR_SECONDARY_COLOR%3AQmxhbmNv&sid=bookmarks#polycard_client=bookmarks&sid=bookmarks",
+        "title": "Filamento Pla Ender 1kg 175mm Blanco",
         "description": "Artículo de Mercado Libre Chile",
         "image": "/uploads/3368ad9bfc93a6cefa7970d682e1ba34.jpg",
         "siteName": "Mercado Libre Chile",
@@ -20,20 +20,20 @@
         "priority": "normal"
       },
       {
-        "id": "item-1795528271153",
+        "id": "item-1795625337980",
         "order": 2,
-        "url": "https://www.falabella.com/falabella-cl/product/151939838/resina-lavable-al-agua-gris-para-impresoras-3d-1000g-creality-halot-resinas/151939839?kid=shopp471fc",
-        "title": "Resina Lavable al Agua Gris para Impresoras 3D 1000g",
-        "description": "Esta sitio web está utilizando un servicio de seguridad para protegerse de los ataques cibernéticos. La acción que acaba de realizar ha desencadenado la solución de seguridad. Hay varias acciones que podrían desencadenar esta restricción, incluyendo la presentación de una palabra o frase en particular, un comando SQL o datos mal formados.",
-        "image": "/uploads/8384b3a2c4240d45cb5f2ed27d6cf88c.jpg",
-        "siteName": "falabella.com",
+        "url": "https://www.todotoner.cl/impresoras/impresoras-3d/resina-uv/1000g-blanca-lavable-al-agua-creality-halot",
+        "title": "Resina Lavable al Agua Blanca para Impresoras 3D 1000g Creality Halot | Resinas",
+        "description": "Resina Lavable al Agua Blanca para Impresoras 3D 1000g Creality Halot. Marca Creality Halot. Stock en Chile, garantía y despacho a todo el país.",
+        "image": "https://cdnx.jumpseller.com/todo-toner/image/58769948/resize/1200/630?1735922369",
+        "siteName": "TodoToner.cl",
         "price": "",
         "priority": "normal"
       },
       {
-        "id": "item-1795528302283",
+        "id": "item-1795625387400",
         "order": 3,
-        "url": "https://www.mercadolibre.cl/pack-filamentos-pla-ender-1kg-175mm-negro-azul/up/MLCU356966042?pdp_filters=item_id%3AMLC1477348075#is_advertising=true&searchVariation=MLCU356966042&backend_model=search-backend&be_origin=backend&position=4&search_layout=grid&type=pad&tracking_id=30189284-c70e-46cd-aea8-2f27674406f0&ad_domain=VQCATCORE_LST&ad_position=4&ad_click_id=OTFhMzE2YjYtYTczYS00YTU4LWFmZDQtMzNmMWI5YmE3NDI1",
+        "url": "https://www.mercadolibre.cl/pack-filamentos-pla-ender-1kg-175mm-negro-azul/up/MLCU356966042?pdp_filters=item_id%3AMLC1477348075&sid=bookmarks#polycard_client=bookmarks&wid=MLC1477348075&sid=bookmarks",
         "title": "Pack Filamentos Pla Ender 1kg 1.75mm Negro + Azul",
         "description": "Artículo de Mercado Libre Chile",
         "image": "/uploads/ce78bb6d6ebb008c10635c79647ef929.jpg",
@@ -42,7 +42,7 @@
         "priority": "normal"
       }
     ],
-    "createdAt": "2026-11-24T13:51:45.707Z",
-    "updatedAt": "2026-11-24T13:51:45.707Z"
+    "createdAt": "2026-11-25T16:49:56.150Z",
+    "updatedAt": "2026-11-25T16:49:56.150Z"
   }
 }

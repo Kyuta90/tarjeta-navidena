@@ -16,16 +16,30 @@ async function ensureServerRunning() {
   } catch (e) {}
 
   if (!isUp) {
-    serverProcess = fork(path.join(__dirname, '../server.js'), [], { stdio: 'inherit' });
-    for (let i = 0; i < 20; i++) {
-      await new Promise(r => setTimeout(r, 300));
-      try {
-        const ping = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
-        if (ping.status === 200) {
-          isUp = true;
-          break;
-        }
-      } catch (e) {}
+    try {
+      serverProcess = require('../server.js');
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        try {
+          const ping = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
+          if (ping.status === 200) {
+            isUp = true;
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (err) {
+      serverProcess = fork(path.join(__dirname, '../server.js'), [], { stdio: 'inherit' });
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 300));
+        try {
+          const ping = await request({ hostname: HOST, port: PORT, path: '/ping', method: 'GET' });
+          if (ping.status === 200) {
+            isUp = true;
+            break;
+          }
+        } catch (e) {}
+      }
     }
     if (!isUp) throw new Error('El servidor no respondió a tiempo en http://127.0.0.1:3000');
   }
@@ -628,6 +642,44 @@ async function runTestSuite() {
     if (delRes.status !== 200) throw new Error(`No se pudo eliminar con adminToken válido: ${delRes.status}`);
   });
 
+  // TEST 19: Reconocimiento y enlace directo con Google Drive
+  await test('19. Extracción y enlace directo desde URLs de Google Drive', async () => {
+    const driveUrl = 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view?usp=sharing';
+    const res = await request({
+      hostname: HOST,
+      port: PORT,
+      path: `/api/preview?url=${encodeURIComponent(driveUrl)}`,
+      method: 'GET'
+    });
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (!res.data.image) throw new Error('No se generó URL de imagen para Google Drive');
+    if (!res.data.image.includes('lh3.googleusercontent.com/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms')) {
+      throw new Error(`La URL generada no apunta a la miniatura directa de Drive: ${res.data.image}`);
+    }
+    if (res.data.siteName !== 'Google Drive') throw new Error(`siteName esperado "Google Drive", recibido: ${res.data.siteName}`);
+  });
+
+  // TEST 20: Diagnóstico de integración Google Drive (/api/drive/status)
+  await test('20. Estado y diagnóstico de Google Drive (/api/drive/status)', async () => {
+    const res = await request({ hostname: HOST, port: PORT, path: '/api/drive/status', method: 'GET' });
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (res.data.directEmbedSupported !== true) throw new Error('directEmbedSupported debe ser true');
+  });
+
+  // TEST 21: Endpoint de Salud Render (/healthz)
+  await test('21. Endpoint de verificación de salud para Render (/healthz)', async () => {
+    const res = await request({ hostname: HOST, port: PORT, path: '/healthz', method: 'GET' });
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (res.raw !== 'OK') throw new Error(`Respuesta esperada "OK", recibida: ${res.raw}`);
+  });
+
+  // TEST 22: Descarga de Respaldo JSON (/api/backup/download)
+  await test('22. Descarga de archivo de respaldo para Google Drive (/api/backup/download)', async () => {
+    const res = await request({ hostname: HOST, port: PORT, path: '/api/backup/download', method: 'GET' });
+    if (res.status !== 200) throw new Error(`Status esperado 200, recibido: ${res.status}`);
+    if (!res.data || typeof res.data !== 'object') throw new Error('El respaldo devuelto no es un objeto JSON');
+  });
+
   // RESUMEN FINAL
   console.log(`\n======================================================`);
   console.log(`📊 RESUMEN DE PRUEBAS:`);
@@ -640,7 +692,10 @@ async function runTestSuite() {
   console.log(`======================================================\n`);
 
   if (serverProcess) {
-    try { serverProcess.kill(); } catch {}
+    try {
+      if (typeof serverProcess.close === 'function') serverProcess.close();
+      else if (typeof serverProcess.kill === 'function') serverProcess.kill();
+    } catch {}
   }
 
   if (failedTests > 0) {
@@ -652,7 +707,10 @@ async function runTestSuite() {
 
 runTestSuite().catch(err => {
   if (serverProcess) {
-    try { serverProcess.kill(); } catch {}
+    try {
+      if (typeof serverProcess.close === 'function') serverProcess.close();
+      else if (typeof serverProcess.kill === 'function') serverProcess.kill();
+    } catch {}
   }
   console.error('Error fatal al ejecutar pruebas:', err);
   process.exit(1);

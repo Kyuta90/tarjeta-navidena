@@ -16,6 +16,7 @@ const { CardStore } = require('./lib/storage');
 const { createUploads } = require('./lib/uploads');
 const { getAllValidNetworkIps, getLocalNetworkIp, isLocalOwner, isLocalOrPrivateHost } = require('./lib/network');
 const tunnel = require('./lib/tunnel');
+const gdrive = require('./lib/gdrive');
 const {
   safeAxiosOptions,
   assertPublicHttpUrl,
@@ -28,6 +29,14 @@ const {
   cleanHttpUrl,
   DEFAULT_IMAGE
 } = require('./lib/security');
+
+// Crash prevention for Render / Production
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception interceptada:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection interceptada:', reason);
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -80,13 +89,50 @@ const cardsLimiter = rateLimit({
 // -------------------------------------------------------------
 // Diagnostic & Tunnel Endpoints
 // -------------------------------------------------------------
+app.get('/healthz', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.get('/ping', (req, res) => {
   res.json({
     ok: true,
     timestamp: new Date().toISOString(),
     localNetworkIp: getLocalNetworkIp(),
-    tunnel: tunnel.getState()
+    tunnel: tunnel.getState(),
+    drive: gdrive.getDriveStatus()
   });
+});
+
+app.get('/api/drive/status', (req, res) => {
+  res.json(gdrive.getDriveStatus());
+});
+
+app.post('/api/drive/sync', async (req, res) => {
+  const result = await gdrive.syncCardsToDrive(cardStore.all());
+  res.json(result);
+});
+
+app.get('/api/backup/download', (req, res) => {
+  const cards = cardStore.all();
+  const jsonStr = JSON.stringify(cards, null, 2);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="tarjetas_navidad_backup_${Date.now()}.json"`);
+  res.send(jsonStr);
+});
+
+app.post('/api/backup/restore', (req, res) => {
+  if (!isLocalOwner(req)) {
+    const adminToken = req.headers['x-admin-token'];
+    if (!adminToken) return res.status(403).json({ error: 'No autorizado para restaurar respaldo' });
+  }
+  const cards = req.body;
+  if (!cards || typeof cards !== 'object' || Array.isArray(cards)) {
+    return res.status(400).json({ error: 'Formato de respaldo JSON inválido' });
+  }
+  Object.entries(cards).forEach(([id, card]) => {
+    cardStore.set(id, card);
+  });
+  res.json({ success: true, count: Object.keys(cards).length });
 });
 
 app.get('/api/tunnel/status', (req, res) => {
@@ -330,6 +376,12 @@ app.get('/api/preview', previewLimiter, async (req, res) => {
       });
     } catch {}
   }
+
+  // Specialized extractor for Google Drive
+  try {
+    const gdriveData = gdrive.extractGoogleDriveData(targetUrl);
+    if (gdriveData) return res.json(gdriveData);
+  } catch {}
 
   // Specialized extractor for Mercado Libre
   try {
@@ -755,9 +807,28 @@ app.get('/api/download-card/:id', (req, res) => {
 });
 
 // -------------------------------------------------------------
+// Render Keep-Alive: evita que el servicio en Render se duerma
+// -------------------------------------------------------------
+const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+if (KEEP_ALIVE_URL) {
+  const intervalMs = 9 * 60 * 1000; // cada 9 minutos (Render Free suspende tras 15 min)
+  console.log(`⏱️ Auto-KeepAlive configurado hacia: ${KEEP_ALIVE_URL} (cada 9 min)`);
+  setInterval(async () => {
+    try {
+      await axios.get(`${KEEP_ALIVE_URL.replace(/\/$/, '')}/ping`, { timeout: 15000 });
+      console.log(`💓 Keep-alive ping enviado exitosamente a ${KEEP_ALIVE_URL}/ping`);
+    } catch (err) {
+      console.warn(`⚠️ Keep-alive ping no respondió: ${err.message}`);
+    }
+  }, intervalMs);
+}
+
+// -------------------------------------------------------------
 // Start Server
 // -------------------------------------------------------------
 const serverInstance = app.listen(PORT, '0.0.0.0', () => {
+  // Sincronizar respaldo en la nube al iniciar si el disco está vacío
+  cardStore.initCloudSync().catch(() => {});
   const ips = getAllValidNetworkIps();
   console.log(`\n==============================================`);
   console.log(`🎄 SERVIDOR DE TARJETA NAVIDEÑA SEGURO ACTIVO 🎅`);

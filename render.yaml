@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tarjeta-de-navidad-digital
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build:css
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KEEP_ALIVE_URL
+        sync: false
+      - key: GDRIVE_WEBHOOK_URL
+        sync: false

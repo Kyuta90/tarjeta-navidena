@@ -316,9 +316,14 @@
             Tus tarjetas se conservan permanentemente y no caducan. Puedes verlas, escanear su QR o eliminarlas cuando decidas.
           </p>
         </div>
-        <button id="refreshRegistryBtn" type="button" class="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm">
-          <span>🔄</span> Actualizar Registro
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="btnBackupDrive" type="button" class="text-xs bg-emerald-600/80 hover:bg-emerald-500 text-white border border-emerald-400/40 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm font-medium" title="Enlazar con Google Drive y descargar respaldo">
+            <span>💾</span> Respaldo / Google Drive
+          </button>
+          <button id="refreshRegistryBtn" type="button" class="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/20 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm">
+            <span>🔄</span> Actualizar Registro
+          </button>
+        </div>
       </div>
 
       <!-- Contenedor del listado de tarjetas -->
