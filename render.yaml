@@ -3,7 +3,7 @@ services:
     name: tarjeta-de-navidad-digital
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build:css
+    buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /healthz
     envVars:
